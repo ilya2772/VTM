@@ -27,3 +27,6 @@ next-env.d.ts
 # licensed TradingView Advanced Charts assets
 /public/charting_library
 /public/datafeeds
+.vercel
+.env*
+!.env.example
