@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Axiom Prop Terminal — виртуальный проп-трейдинг с графиками TradingView." />
+    <title>Axiom Prop Terminal</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #05080d;
+        --panel: #080d13;
+        --panel-2: #0b1119;
+        --panel-3: #101720;
+        --line: #18212d;
+        --line-soft: #111923;
+        --text: #e8edf5;
+        --muted: #778394;
+        --muted-2: #4f5b6b;
+        --green: #18d77a;
+        --green-soft: #0b2a1c;
+        --red: #ff4254;
+        --red-soft: #311218;
+        --purple: #a93cff;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body { margin: 0; overflow-x: hidden; background: var(--bg); color: var(--text); }
+      button, input { font: inherit; }
+      button:focus-visible, input:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+      [hidden] { display: none !important; }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: 58px minmax(0, 1fr) 30px;
+      }
+
+      .topbar {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: #070b11;
+      }
+
+      .brand { display: flex; align-items: center; gap: 9px; min-width: 168px; }
+      .brand-mark {
+        width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px;
+        background: linear-gradient(135deg, var(--green), var(--purple)); color: #05080d; font-weight: 900;
+      }
+      .brand-name { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+      .brand-sub { display: block; margin-top: 1px; color: var(--muted); font-size: 8px; letter-spacing: .08em; }
+
+      .pair-chip {
+        display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+        border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font-size: 12px; font-weight: 700;
+      }
+      .pair-chip em { color: #f6ae2d; font-style: normal; }
+      .live-price { color: var(--green); font-size: 13px; font-weight: 760; font-variant-numeric: tabular-nums; }
+
+      .top-metrics { min-width: 0; display: flex; align-items: center; gap: 21px; }
+      .top-metric { min-width: max-content; }
+      .top-metric span { display: block; color: var(--muted); font-size: 8px; }
+      .top-metric strong { display: block; margin-top: 3px; color: #dce3ec; font-size: 10px; font-weight: 620; font-variant-numeric: tabular-nums; }
+      .top-metric strong.positive { color: var(--green); }
+      .account-metrics { margin-left: auto; }
+
+      .profile { display: flex; align-items: center; gap: 8px; min-width: max-content; }
+      .avatar { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: #1b2430; font-size: 11px; font-weight: 800; }
+      .profile strong { display: block; font-size: 10px; }
+      .profile span { display: block; margin-top: 1px; color: var(--purple); font-size: 8px; }
+
+      .terminal {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 42px 190px minmax(560px, 1fr) 278px;
+        gap: 1px;
+        background: var(--line);
+      }
+
+      .rail, .leftbar, .workspace, .rightbar { min-width: 0; background: var(--panel); }
+      .rail { display: flex; flex-direction: column; align-items: center; gap: 11px; padding: 12px 0; }
+      .rail-item {
+        width: 27px; height: 27px; display: grid; place-items: center; border-radius: 6px;
+        color: var(--muted); background: transparent; font-size: 12px;
+      }
+      .rail-item.active { color: #fff; background: linear-gradient(135deg, #5d1d83, #251137); box-shadow: inset 2px 0 var(--purple); }
+      .rail-spacer { flex: 1; }
+
+      .leftbar { overflow-y: auto; }
+      .side-section { padding: 13px; border-bottom: 1px solid var(--line); }
+      .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+      .section-title h2 { margin: 0; color: #cad2df; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+      .badge { padding: 3px 6px; border-radius: 999px; background: #321249; color: #d99cff; font-size: 8px; }
+      .profit-target { margin-bottom: 7px; color: var(--muted); font-size: 9px; }
+      .profit-target strong { color: var(--green); font-size: 18px; font-weight: 680; }
+      .bar { height: 5px; overflow: hidden; border-radius: 999px; background: #19232e; }
+      .bar > span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+      .bar-row { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 8px; }
+      .bar-row strong { color: #cbd3de; font-weight: 600; }
+
+      .stat-list { display: grid; gap: 9px; }
+      .stat { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; }
+      .stat strong { color: #d5dce6; font-weight: 620; }
+      .stat strong.green { color: var(--green); }
+      .stat strong.red { color: var(--red); }
+
+      .watchlist { display: grid; gap: 4px; }
+      .market-button {
+        width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px;
+        border: 1px solid transparent; border-radius: 7px; background: transparent; color: inherit; text-align: left; cursor: pointer;
+      }
+      .market-button:hover { background: var(--panel-3); }
+      .market-button[aria-pressed="true"] { border-color: #2e3947; background: #0d141d; }
+      .market-button strong { display: block; font-size: 10px; }
+      .market-button span { display: block; margin-top: 2px; color: var(--muted); font-size: 8px; }
+      .market-button em { align-self: center; color: var(--green); font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; }
+
+      .workspace { min-height: 0; display: grid; grid-template-rows: minmax(470px, 1fr) 262px; }
+      .chart-zone { min-height: 0; display: grid; grid-template-rows: 38px minmax(430px, 1fr); }
+      .chart-head { display: flex; align-items: center; gap: 15px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+      .chart-head strong { font-size: 11px; }
+      .intervals { display: flex; gap: 12px; color: var(--muted); font-size: 9px; }
+      .intervals .active { color: #fff; border-bottom: 2px solid var(--purple); line-height: 36px; }
+      .chart-tools { margin-left: auto; color: var(--muted); font-size: 9px; }
+      #tradingview-chart { min-height: 430px; background: #080d13; }
+      #tradingview-chart .tradingview-widget-container,
+      #tradingview-chart .tradingview-widget-container__widget { width: 100%; height: 100%; }
+      .chart-loading { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+
+      .order-desk { min-width: 0; padding: 9px 12px 12px; border-top: 1px solid var(--line); background: #070b11; }
+      .order-tabs { height: 24px; display: flex; align-items: flex-start; gap: 24px; color: var(--muted); font-size: 10px; }
+      .order-tabs .active { color: #fff; border-bottom: 2px solid var(--purple); padding-bottom: 7px; }
+      .order-grid { display: grid; grid-template-columns: minmax(210px, 1fr) 152px minmax(210px, 1fr); gap: 10px; }
+      .order-card, .score-card { min-width: 0; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+      .order-card-head { display: flex; align-items: center; justify-content: space-between; height: 25px; padding: 0 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+      .order-card.long .order-card-head { background: linear-gradient(90deg, #0b643d, #0c1915); }
+      .order-card.short .order-card-head { background: linear-gradient(90deg, #70232b, #1c1115); }
+      .order-card-head span:last-child { color: #c5cdd8; font-size: 9px; font-weight: 500; }
+      .field-label { display: flex; justify-content: space-between; margin: 7px 0 4px; color: var(--muted); font-size: 8px; }
+      .amount-field { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; border: 1px solid var(--line); background: #080c12; }
+      .amount-field span { padding: 0 7px; color: var(--muted); font-size: 8px; }
+      .amount-field span:last-child { text-align: right; }
+      .amount-field input { min-width: 0; width: 100%; padding: 7px 3px; border: 0; outline: 0; background: transparent; color: #fff; text-align: center; font-size: 10px; font-variant-numeric: tabular-nums; }
+      .percent-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin-top: 5px; }
+      .percent-row button { padding: 5px 2px; border: 1px solid var(--line); background: #0d151e; color: #9da8b7; font-size: 8px; cursor: pointer; }
+      .percent-row button:hover { border-color: #394657; color: #fff; }
+      .order-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 6px; }
+      .meta-box { padding: 6px; border: 1px solid var(--line); color: var(--muted); font-size: 8px; }
+      .meta-box strong { float: right; color: #d4dce6; font-size: 9px; font-weight: 600; }
+      .open-button { width: 100%; margin-top: 7px; padding: 8px; border: 0; border-radius: 3px; color: white; font-size: 11px; font-weight: 720; cursor: pointer; }
+      .open-button:disabled { cursor: not-allowed; opacity: .38; }
+      .long .open-button { background: linear-gradient(90deg, #0ead5f, #16c976); }
+      .short .open-button { background: linear-gradient(90deg, #d52637, #f13a49); }
+      .order-message { min-height: 12px; margin-top: 5px; color: var(--muted); font-size: 8px; text-align: center; }
+      .order-message.error { color: var(--red); }
+      .order-message.success { color: var(--green); }
+
+      .score-card { display: flex; flex-direction: column; justify-content: space-between; }
+      .score-card h3 { margin: 0; font-size: 10px; }
+      .score-number { margin-top: 7px; color: var(--green); font-size: 25px; font-weight: 650; }
+      .score-number span { color: var(--muted); font-size: 14px; }
+      .sparkline { height: 42px; position: relative; overflow: hidden; }
+      .sparkline::before {
+        content: ""; position: absolute; inset: 8px 0 2px; opacity: .8;
+        background: linear-gradient(135deg, transparent 0 14%, #11834d 15% 17%, transparent 18% 33%, #11834d 34% 36%, transparent 37% 50%, #14a45e 51% 53%, transparent 54% 68%, #11834d 69% 71%, transparent 72%);
+        border-bottom: 1px solid #1da969;
+      }
+      .risk-meter { height: 6px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+      .risk-meter span { border-radius: 2px; background: var(--green); }
+      .risk-meter span:last-child { background: #b5be4b; }
+      .score-stat { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 8px; }
+      .score-stat strong { color: #d4dce6; }
+
+      .rightbar { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; }
+      .right-card { padding: 13px; border-bottom: 1px solid var(--line); background: var(--panel); }
+      .position-tabs { display: flex; gap: 22px; margin: -1px 0 14px; color: var(--muted); font-size: 9px; }
+      .position-tabs .active { color: #fff; padding-bottom: 9px; border-bottom: 2px solid var(--purple); }
+      .position-head { display: flex; align-items: center; justify-content: space-between; }
+      .position-head strong { font-size: 11px; }
+      .direction-badge { padding: 4px 6px; border-radius: 4px; font-size: 9px; }
+      .direction-badge.long { color: var(--green); background: var(--green-soft); }
+      .direction-badge.short { color: var(--red); background: var(--red-soft); }
+      .position-pnl { display: grid; grid-template-columns: 1fr auto; margin-top: 14px; }
+      .data-label { color: var(--muted); font-size: 8px; }
+      .data-value { display: block; margin-top: 5px; color: #e1e7ef; font-size: 12px; font-variant-numeric: tabular-nums; }
+      .data-value.positive { color: var(--green); }
+      .data-value.negative { color: var(--red); }
+      .position-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; }
+      .position-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 15px; }
+      .position-actions button { padding: 8px; border: 1px solid #263141; border-radius: 5px; background: #0a0f16; color: #cbd3de; font-size: 9px; cursor: pointer; }
+      .position-actions button:disabled { cursor: not-allowed; opacity: .35; }
+      .position-switcher { display: flex; gap: 5px; margin-top: 10px; overflow-x: auto; }
+      .position-switcher button { min-width: max-content; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; background: #0b1119; color: var(--muted); font-size: 8px; cursor: pointer; }
+      .position-switcher button[aria-pressed="true"] { border-color: var(--purple); color: #fff; }
+      .empty-position { min-height: 210px; display: grid; place-items: center; color: var(--muted); font-size: 10px; text-align: center; }
+
+      .right-card h3 { margin: 0; font-size: 11px; }
+      .drawdown-head { display: flex; justify-content: space-between; align-items: center; }
+      .drawdown-head strong { font-size: 10px; }
+      .drawdown-bar { height: 7px; margin-top: 14px; overflow: hidden; border-radius: 999px; background: #17212c; }
+      .drawdown-bar span { display: block; height: 100%; width: 0; background: var(--green); transition: width .25s ease; }
+      .drawdown-meta { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 8px; }
+
+      .coach { flex: 1; min-height: 205px; display: flex; flex-direction: column; }
+      .coach-head { display: flex; justify-content: space-between; }
+      .coach-badge { padding: 3px 6px; border-radius: 999px; background: #311247; color: #dca2ff; font-size: 8px; }
+      .coach-note { margin-top: 15px; padding: 11px; border: 1px solid var(--line); border-radius: 6px; background: #0e151e; color: #aeb8c6; font-size: 9px; line-height: 1.65; }
+      .coach-note strong { color: var(--green); font-weight: 620; }
+      .coach-input { margin-top: auto; padding: 9px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted-2); font-size: 8px; }
+
+      .footer { display: flex; align-items: center; gap: 22px; padding: 0 13px; border-top: 1px solid var(--line); background: #070b11; color: var(--muted); font-size: 8px; }
+      .footer strong { color: var(--green); font-weight: 600; }
+      .footer span:last-child { margin-left: auto; }
+
+      @media (max-width: 1250px) {
+        .terminal { grid-template-columns: 42px minmax(560px, 1fr) 268px; }
+        .leftbar { display: none; }
+        .top-metrics .optional { display: none; }
+      }
+
+      @media (max-width: 900px) {
+        .app { grid-template-rows: 52px auto 30px; }
+        .topbar { gap: 10px; }
+        .brand { min-width: 32px; }
+        .brand-copy, .top-metrics { display: none; }
+        .terminal { display: flex; flex-direction: column; width: 100%; }
+        .rail { display: none; }
+        .workspace { order: 1; display: grid; grid-template-rows: 540px auto; }
+        .chart-zone { grid-template-rows: 38px 502px; }
+        #tradingview-chart { min-height: 502px; }
+        .rightbar { order: 2; display: grid; grid-template-columns: 1.2fr .8fr; }
+        .coach { grid-column: 1 / -1; min-height: 180px; }
+      }
+
+      @media (max-width: 640px) {
+        .profile-copy, .account-metrics { display: none; }
+        .pair-chip { padding: 7px; }
+        .workspace { grid-template-rows: 500px auto; }
+        .chart-zone { grid-template-rows: 38px 462px; }
+        #tradingview-chart { min-height: 462px; }
+        .chart-tools { display: none; }
+        .order-grid { grid-template-columns: 1fr; }
+        .score-card { min-height: 150px; }
+        .rightbar { display: block; }
+        .footer span:nth-child(2) { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">A</span>
+          <span class="brand-copy"><span class="brand-name">AXIOM</span><span class="brand-sub">PROP TERMINAL</span></span>
+        </div>
+        <div class="pair-chip"><span id="header-symbol">BTCUSDT</span><em>★</em></div>
+        <span class="live-price" id="header-price">SIM $117,420.00</span>
+        <div class="top-metrics">
+          <div class="top-metric"><span>Режим</span><strong>Virtual 1×</strong></div>
+          <div class="top-metric optional"><span>Источник графика</span><strong>TradingView</strong></div>
+          <div class="top-metric optional"><span>Исполнение</span><strong>Local simulator</strong></div>
+        </div>
+        <div class="top-metrics account-metrics">
+          <div class="top-metric"><span>Balance</span><strong id="header-balance">$50,000.00</strong></div>
+          <div class="top-metric"><span>Equity</span><strong id="header-equity">$50,000.00</strong></div>
+          <div class="top-metric"><span>PnL</span><strong id="header-pnl" class="positive">$0.00</strong></div>
+        </div>
+        <div class="profile"><span class="avatar">VT</span><span class="profile-copy"><strong>Trader</strong><span>Demo account</span></span></div>
+      </header>
+
+      <main class="terminal">
+        <nav class="rail" aria-label="Разделы терминала">
+          <span class="rail-item active" title="Торговля">▦</span>
+          <span class="rail-item" title="Аналитика">⌁</span>
+          <span class="rail-item" title="Журнал">▤</span>
+          <span class="rail-item" title="Риск">◇</span>
+          <span class="rail-spacer"></span>
+          <span class="rail-item" title="Настройки">⚙</span>
+        </nav>
+
+        <aside class="leftbar" aria-label="Прогресс и рынки">
+          <section class="side-section">
+            <div class="section-title"><h2>Challenge progress</h2><span class="badge">Phase 1</span></div>
+            <div class="profit-target">Profit Target<br /><strong id="challenge-pnl">$0.00</strong> / $5,000</div>
+            <div class="bar"><span id="challenge-bar" style="width:0%"></span></div>
+            <div class="bar-row"><span>Прогресс</span><strong id="challenge-percent">0.00%</strong></div>
+          </section>
+          <section class="side-section">
+            <div class="section-title"><h2>Statistics</h2></div>
+            <div class="stat-list">
+              <div class="stat"><span>Total PnL</span><strong id="side-total-pnl" class="green">$0.00</strong></div>
+              <div class="stat"><span>Open positions</span><strong id="side-open-count">0</strong></div>
+              <div class="stat"><span>Used margin</span><strong id="side-used-margin">$0.00</strong></div>
+              <div class="stat"><span>Realized PnL</span><strong id="side-realized">$0.00</strong></div>
+            </div>
+          </section>
+          <section class="side-section">
+            <div class="section-title"><h2>Markets</h2><span class="badge">5</span></div>
+            <div class="watchlist">
+              <button class="market-button" type="button" data-symbol="BINANCE:BTCUSDT" aria-pressed="true"><span><strong>BTCUSDT</strong><span>Binance</span></span><em>BTC</em></button>
+              <button class="market-button" type="button" data-symbol="BINANCE:ETHUSDT" aria-pressed="false"><span><strong>ETHUSDT</strong><span>Binance</span></span><em>ETH</em></button>
+              <button class="market-button" type="button" data-symbol="NASDAQ:NVDA" aria-pressed="false"><span><strong>NVDA</strong><span>Nasdaq</span></span><em>STK</em></button>
+              <button class="market-button" type="button" data-symbol="NASDAQ:AAPL" aria-pressed="false"><span><strong>AAPL</strong><span>Nasdaq</span></span><em>STK</em></button>
+              <button class="market-button" type="button" data-symbol="OANDA:XAUUSD" aria-pressed="false"><span><strong>XAUUSD</strong><span>Oanda</span></span><em>GOLD</em></button>
+            </div>
+          </section>
+          <section class="side-section">
+            <div class="section-title"><h2>Risk score</h2></div>
+            <div class="profit-target"><strong id="side-risk-score">92</strong> / 100</div>
+            <div class="bar"><span id="side-risk-bar" style="width:92%"></span></div>
+            <div class="bar-row"><span>Статус</span><strong id="side-risk-label">Excellent</strong></div>
+          </section>
+        </aside>
+
+        <section class="workspace" aria-label="Торговый терминал">
+          <div class="chart-zone">
+            <div class="chart-head">
+              <strong id="chart-symbol">BTCUSDT</strong>
+              <div class="intervals"><span>5m</span><span class="active">15m</span><span>1h</span><span>4h</span><span>1D</span></div>
+              <span class="chart-tools">Trend Line · Fibonacci · Indicators</span>
+            </div>
+            <div id="tradingview-chart" aria-live="polite"><div class="chart-loading">Загрузка TradingView…</div></div>
+          </div>
+
+          <section class="order-desk" aria-label="Открытие виртуальной позиции">
+            <div class="order-tabs"><span class="active">Market</span><span>Limit — позже</span><span>Stop Limit — позже</span></div>
+            <div class="order-grid">
+              <article class="order-card long">
+                <div class="order-card-head"><span>Buy / Long</span><span>Leverage 1×</span></div>
+                <div class="field-label"><span>Amount</span><span id="long-percent">2.00%</span></div>
+                <div class="amount-field"><span>USD</span><input id="long-size" inputmode="decimal" value="1000.00" aria-label="Размер Long позиции" /><span>USD</span></div>
+                <div class="percent-row" aria-label="Быстрый размер Long">
+                  <button type="button" data-side="long" data-percent="10">10%</button><button type="button" data-side="long" data-percent="25">25%</button><button type="button" data-side="long" data-percent="50">50%</button><button type="button" data-side="long" data-percent="75">75%</button><button type="button" data-side="long" data-percent="100">100%</button>
+                </div>
+                <div class="order-meta"><div class="meta-box">Sim Mark <strong class="ticket-price">$117,420.00</strong></div><div class="meta-box">Liq. Price <strong>N/A</strong></div></div>
+                <button class="open-button" id="open-long" type="button">Open Long</button>
+                <div class="order-message" id="long-message" role="status"></div>
+              </article>
+
+              <article class="score-card">
+                <div><h3>Risk Score ⓘ</h3><div class="score-number"><span id="desk-risk-score">92</span><span> /100</span></div></div>
+                <div class="sparkline" aria-hidden="true"></div>
+                <div><div class="score-stat"><span>Risk</span><strong id="desk-risk-label">Low</strong></div><div class="risk-meter"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="score-stat"><span>Exposure</span><strong id="desk-exposure">0.00%</strong></div></div>
+              </article>
+
+              <article class="order-card short">
+                <div class="order-card-head"><span>Sell / Short</span><span>Leverage 1×</span></div>
+                <div class="field-label"><span>Amount</span><span id="short-percent">2.00%</span></div>
+                <div class="amount-field"><span>USD</span><input id="short-size" inputmode="decimal" value="1000.00" aria-label="Размер Short позиции" /><span>USD</span></div>
+                <div class="percent-row" aria-label="Быстрый размер Short">
+                  <button type="button" data-side="short" data-percent="10">10%</button><button type="button" data-side="short" data-percent="25">25%</button><button type="button" data-side="short" data-percent="50">50%</button><button type="button" data-side="short" data-percent="75">75%</button><button type="button" data-side="short" data-percent="100">100%</button>
+                </div>
+                <div class="order-meta"><div class="meta-box">Sim Mark <strong class="ticket-price">$117,420.00</strong></div><div class="meta-box">Liq. Price <strong>N/A</strong></div></div>
+                <button class="open-button" id="open-short" type="button">Open Short</button>
+                <div class="order-message" id="short-message" role="status"></div>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <aside class="rightbar" aria-label="Позиции и риск">
+          <section class="right-card">
+            <div class="position-tabs"><span class="active">Position <b id="position-count">0</b></span><span>Orders</span><span>History</span><span>Risk</span></div>
+            <div class="empty-position" id="empty-position">Открытых позиций пока нет.<br />Используйте Long или Short под графиком.</div>
+            <div id="active-position" hidden>
+              <div class="position-head"><strong id="position-symbol">—</strong><span class="direction-badge long" id="position-direction">LONG 1×</span></div>
+              <div class="position-pnl"><div><span class="data-label">Unrealized PnL (USD)</span><strong class="data-value" id="position-pnl">$0.00</strong></div><div><span class="data-label">Size (USD)</span><strong class="data-value" id="position-size">$0.00</strong></div></div>
+              <div class="position-prices"><div><span class="data-label">Entry Price</span><strong class="data-value" id="position-entry">—</strong></div><div><span class="data-label">Sim Mark</span><strong class="data-value" id="position-mark">—</strong></div><div><span class="data-label">Liq. Price</span><strong class="data-value">N/A</strong></div></div>
+              <div class="position-actions"><button type="button" disabled title="TP/SL появится после серверного risk engine">TP / SL</button><button type="button" id="close-position">Close Position</button></div>
+              <div class="position-switcher" id="position-switcher" aria-label="Выбор открытой позиции"></div>
+            </div>
+          </section>
+
+          <section class="right-card">
+            <div class="drawdown-head"><h3>Daily Drawdown</h3><strong id="drawdown-value">0.00% / 5.00%</strong></div>
+            <div class="drawdown-bar"><span id="drawdown-bar"></span></div>
+            <div class="drawdown-meta"><span>Remaining</span><strong id="drawdown-remaining">5.00%</strong></div>
+          </section>
+
+          <section class="right-card coach">
+            <div class="coach-head"><h3>Risk Coach</h3><span class="coach-badge">LOCAL</span></div>
+            <div class="coach-note" id="coach-note">Откройте виртуальную позицию — локальный помощник оценит загрузку маржи и текущее направление PnL.</div>
+            <div class="coach-input">Правила риска работают локально · без передачи данных</div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="footer"><span>System Status <strong>● Simulation operational</strong></span><span>TradingView chart connected</span><span>Реальные заявки и транзакции отключены</span></footer>
+    </div>
+
+    <script>
+      const STARTING_BALANCE_CENTS = 5000000n;
+      const markets = new Map([
+        ["BINANCE:BTCUSDT", { label: "BTCUSDT", basePriceCents: 11742000n }],
+        ["BINANCE:ETHUSDT", { label: "ETHUSDT", basePriceCents: 378520n }],
+        ["NASDAQ:NVDA", { label: "NVDA", basePriceCents: 17340n }],
+        ["NASDAQ:AAPL", { label: "AAPL", basePriceCents: 21388n }],
+        ["OANDA:XAUUSD", { label: "XAUUSD", basePriceCents: 336040n }]
+      ]);
+      const priceOffsetsBps = [0n, 7n, 12n, 4n, -6n, -11n, -3n, 9n];
+      const currentPrices = new Map();
+      const positions = [];
+      let balanceCents = STARTING_BALANCE_CENTS;
+      let realizedPnlCents = 0n;
+      let selectedSymbol = "BINANCE:BTCUSDT";
+      let activePositionId = null;
+      let nextPositionId = 1;
+      let priceStep = 0;
+      markets.forEach((market, symbol) => currentPrices.set(symbol, market.basePriceCents));
+
+      const chartHost = document.getElementById("tradingview-chart");
+      const longInput = document.getElementById("long-size");
+      const shortInput = document.getElementById("short-size");
+      const longButton = document.getElementById("open-long");
+      const shortButton = document.getElementById("open-short");
+      const longMessage = document.getElementById("long-message");
+      const shortMessage = document.getElementById("short-message");
+
+      function parseMoneyToCents(value) {
+        const normalized = value.trim().replace(",", ".");
+        if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
+        const [whole, fraction = ""] = normalized.split(".");
+        return BigInt(whole) * 100n + BigInt(`${fraction}00`.slice(0, 2));
+      }
+
+      function centsToInput(cents) {
+        return `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}`;
+      }
+
+      function formatCents(cents, signed = false) {
+        const negative = cents < 0n;
+        const absolute = negative ? -cents : cents;
+        const dollars = (absolute / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const fraction = (absolute % 100n).toString().padStart(2, "0");
+        const prefix = negative ? "−" : signed && cents > 0n ? "+" : "";
+        return `${prefix}$${dollars}.${fraction}`;
+      }
+
+      function formatPercentHundredths(value) {
+        const negative = value < 0n;
+        const absolute = negative ? -value : value;
+        return `${negative ? "−" : ""}${absolute / 100n}.${(absolute % 100n).toString().padStart(2, "0")}%`;
+      }
+
+      function percentOf(part, whole) {
+        return whole === 0n ? 0n : (part * 10000n) / whole;
+      }
+
+      function usedMargin() {
+        return positions.reduce((total, position) => total + position.notionalCents, 0n);
+      }
+
+      function availableMargin() {
+        const value = balanceCents - usedMargin();
+        return value > 0n ? value : 0n;
+      }
+
+      function positionPnl(position) {
+        const mark = currentPrices.get(position.symbol);
+        if (mark === undefined || position.entryPriceCents === 0n) return 0n;
+        const move = mark - position.entryPriceCents;
+        const directedMove = position.direction === "long" ? move : -move;
+        return (position.notionalCents * directedMove) / position.entryPriceCents;
+      }
+
+      function totalUnrealizedPnl() {
+        return positions.reduce((total, position) => total + positionPnl(position), 0n);
+      }
+
+      function setValueTone(element, value) {
+        element.classList.toggle("positive", value > 0n);
+        element.classList.toggle("negative", value < 0n);
+      }
+
+      function validateOrder(side) {
+        const input = side === "long" ? longInput : shortInput;
+        const button = side === "long" ? longButton : shortButton;
+        const message = side === "long" ? longMessage : shortMessage;
+        const percentNode = document.getElementById(`${side}-percent`);
+        const cents = parseMoneyToCents(input.value);
+        const valid = cents !== null && cents > 0n && cents <= availableMargin();
+        button.disabled = !valid;
+
+        if (cents === null || cents <= 0n) {
+          percentNode.textContent = "0.00%";
+          message.textContent = "Введите корректный размер";
+          message.className = "order-message error";
+        } else {
+          percentNode.textContent = formatPercentHundredths(percentOf(cents, balanceCents));
+          if (cents > availableMargin()) {
+            message.textContent = "Недостаточно маржи";
+            message.className = "order-message error";
+          } else if (!message.classList.contains("success")) {
+            message.textContent = "";
+            message.className = "order-message";
+          }
+        }
+      }
+
+      function renderChart(symbol) {
+        chartHost.replaceChildren();
+        const container = document.createElement("div");
+        container.className = "tradingview-widget-container";
+        const widget = document.createElement("div");
+        widget.className = "tradingview-widget-container__widget";
+        container.appendChild(widget);
+        const script = document.createElement("script");
+        script.type = "text/javascript";
+        script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+        script.async = true;
+        script.textContent = JSON.stringify({
+          autosize: true, symbol, interval: "15", timezone: "Etc/UTC", theme: "dark",
+          backgroundColor: "rgba(8, 13, 19, 1)", style: "1", locale: "ru",
+          withdateranges: true, hide_side_toolbar: false, allow_symbol_change: false,
+          save_image: true, show_popup_button: true, popup_width: "1200", popup_height: "720",
+          calendar: false, support_host: "https://www.tradingview.com"
+        });
+        container.appendChild(script);
+        chartHost.appendChild(container);
+      }
+
+      function openPosition(direction) {
+        const input = direction === "long" ? longInput : shortInput;
+        const message = direction === "long" ? longMessage : shortMessage;
+        const notionalCents = parseMoneyToCents(input.value);
+        const entryPriceCents = currentPrices.get(selectedSymbol);
+        if (notionalCents === null || notionalCents <= 0n || notionalCents > availableMargin() || entryPriceCents === undefined) {
+          validateOrder(direction);
+          return;
+        }
+        const market = markets.get(selectedSymbol);
+        const position = { id: nextPositionId, symbol: selectedSymbol, direction, notionalCents, entryPriceCents };
+        positions.push(position);
+        activePositionId = position.id;
+        nextPositionId += 1;
+        message.textContent = `${direction === "long" ? "Long" : "Short"} ${market?.label ?? selectedSymbol} открыт`;
+        message.className = "order-message success";
+        renderState();
+      }
+
+      function closeActivePosition() {
+        const index = positions.findIndex((position) => position.id === activePositionId);
+        if (index < 0) return;
+        const position = positions[index];
+        if (!position) return;
+        const pnl = positionPnl(position);
+        balanceCents += pnl;
+        realizedPnlCents += pnl;
+        positions.splice(index, 1);
+        activePositionId = positions.at(-1)?.id ?? null;
+        renderState();
+      }
+
+      function renderPositionPanel() {
+        const active = positions.find((position) => position.id === activePositionId) ?? positions.at(-1);
+        document.getElementById("position-count").textContent = String(positions.length);
+        document.getElementById("empty-position").hidden = Boolean(active);
+        document.getElementById("active-position").hidden = !active;
+        const switcher = document.getElementById("position-switcher");
+        switcher.replaceChildren();
+        if (!active) return;
+
+        activePositionId = active.id;
+        const market = markets.get(active.symbol);
+        const mark = currentPrices.get(active.symbol);
+        if (!market || mark === undefined) return;
+        const pnl = positionPnl(active);
+        const pnlPercent = percentOf(pnl, active.notionalCents);
+        document.getElementById("position-symbol").textContent = market.label;
+        const direction = document.getElementById("position-direction");
+        direction.textContent = `${active.direction.toUpperCase()} 1×`;
+        direction.className = `direction-badge ${active.direction}`;
+        const pnlNode = document.getElementById("position-pnl");
+        pnlNode.textContent = `${formatCents(pnl, true)} · ${formatPercentHundredths(pnlPercent)}`;
+        setValueTone(pnlNode, pnl);
+        document.getElementById("position-size").textContent = formatCents(active.notionalCents);
+        document.getElementById("position-entry").textContent = formatCents(active.entryPriceCents);
+        document.getElementById("position-mark").textContent = formatCents(mark);
+
+        positions.forEach((position) => {
+          const itemMarket = markets.get(position.symbol);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.positionId = String(position.id);
+          button.setAttribute("aria-pressed", String(position.id === activePositionId));
+          button.textContent = `${itemMarket?.label ?? position.symbol} ${position.direction.toUpperCase()}`;
+          switcher.appendChild(button);
+        });
+      }
+
+      function renderRisk(unrealized) {
+        const equityDelta = realizedPnlCents + unrealized;
+        const drawdown = equityDelta < 0n ? -equityDelta : 0n;
+        const drawdownHundredths = percentOf(drawdown, STARTING_BALANCE_CENTS);
+        const remainingHundredths = drawdownHundredths >= 500n ? 0n : 500n - drawdownHundredths;
+        document.getElementById("drawdown-value").textContent = `${formatPercentHundredths(drawdownHundredths)} / 5.00%`;
+        document.getElementById("drawdown-remaining").textContent = formatPercentHundredths(remainingHundredths);
+        const drawdownWidth = drawdownHundredths >= 500n ? 100n : (drawdownHundredths * 100n) / 500n;
+        document.getElementById("drawdown-bar").style.width = `${drawdownWidth}%`;
+
+        const exposure = percentOf(usedMargin(), balanceCents);
+        const riskScore = exposure >= 7500n ? 35n : exposure >= 5000n ? 55n : exposure >= 2500n ? 72n : 92n;
+        const riskLabel = exposure >= 7500n ? "Critical" : exposure >= 5000n ? "High" : exposure >= 2500n ? "Medium" : "Low";
+        document.getElementById("side-risk-score").textContent = String(riskScore);
+        document.getElementById("desk-risk-score").textContent = String(riskScore);
+        document.getElementById("side-risk-bar").style.width = `${riskScore}%`;
+        document.getElementById("side-risk-label").textContent = riskLabel;
+        document.getElementById("desk-risk-label").textContent = riskLabel;
+        document.getElementById("desk-exposure").textContent = formatPercentHundredths(exposure);
+
+        const coach = document.getElementById("coach-note");
+        if (positions.length === 0) {
+          coach.textContent = "Откройте виртуальную позицию — локальный помощник оценит загрузку маржи и текущее направление PnL.";
+        } else if (exposure >= 5000n) {
+          coach.innerHTML = `Использовано <strong>${formatPercentHundredths(exposure)}</strong> баланса. Загрузка высокая: уменьшите размер следующих позиций.`;
+        } else if (unrealized < 0n) {
+          coach.innerHTML = `Текущий нереализованный результат <strong>${formatCents(unrealized, true)}</strong>. Проверьте суммарную экспозицию перед новой сделкой.`;
+        } else {
+          coach.innerHTML = `Открыто позиций: <strong>${positions.length}</strong>. Экспозиция ${formatPercentHundredths(exposure)}, текущий PnL ${formatCents(unrealized, true)}.`;
+        }
+      }
+
+      function renderState() {
+        const mark = currentPrices.get(selectedSymbol);
+        const market = markets.get(selectedSymbol);
+        const unrealized = totalUnrealizedPnl();
+        const equity = balanceCents + unrealized;
+        if (mark !== undefined) {
+          const formattedMark = formatCents(mark);
+          document.getElementById("header-price").textContent = `SIM ${formattedMark}`;
+          document.querySelectorAll(".ticket-price").forEach((node) => { node.textContent = formattedMark; });
+        }
+        if (market) {
+          document.getElementById("header-symbol").textContent = market.label;
+          document.getElementById("chart-symbol").textContent = market.label;
+        }
+        document.getElementById("header-balance").textContent = formatCents(balanceCents);
+        document.getElementById("header-equity").textContent = formatCents(equity);
+        const headerPnl = document.getElementById("header-pnl");
+        headerPnl.textContent = formatCents(realizedPnlCents + unrealized, true);
+        setValueTone(headerPnl, realizedPnlCents + unrealized);
+        document.getElementById("side-total-pnl").textContent = formatCents(realizedPnlCents + unrealized, true);
+        document.getElementById("side-realized").textContent = formatCents(realizedPnlCents, true);
+        document.getElementById("side-used-margin").textContent = formatCents(usedMargin());
+        document.getElementById("side-open-count").textContent = String(positions.length);
+
+        const challengePnl = realizedPnlCents + unrealized;
+        const positiveChallenge = challengePnl > 0n ? challengePnl : 0n;
+        const challengeHundredths = percentOf(positiveChallenge, 500000n);
+        const challengeWidth = challengeHundredths >= 10000n ? 100n : challengeHundredths / 100n;
+        document.getElementById("challenge-pnl").textContent = formatCents(challengePnl, true);
+        document.getElementById("challenge-percent").textContent = formatPercentHundredths(challengeHundredths);
+        document.getElementById("challenge-bar").style.width = `${challengeWidth}%`;
+        renderPositionPanel();
+        renderRisk(unrealized);
+        validateOrder("long");
+        validateOrder("short");
+      }
+
+      function tickPrices() {
+        priceStep = (priceStep + 1) % priceOffsetsBps.length;
+        const offset = priceOffsetsBps[priceStep] ?? 0n;
+        markets.forEach((market, symbol) => currentPrices.set(symbol, (market.basePriceCents * (10000n + offset)) / 10000n));
+        renderState();
+      }
+
+      document.querySelectorAll(".market-button").forEach((button) => {
+        button.addEventListener("click", () => {
+          const symbol = button.dataset.symbol;
+          if (!symbol || !markets.has(symbol)) return;
+          selectedSymbol = symbol;
+          document.querySelectorAll(".market-button").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+          renderChart(symbol);
+          renderState();
+        });
+      });
+
+      document.querySelectorAll(".percent-row button").forEach((button) => {
+        button.addEventListener("click", () => {
+          const side = button.dataset.side;
+          const percent = button.dataset.percent;
+          if ((side !== "long" && side !== "short") || !percent || !/^\d+$/.test(percent)) return;
+          const cents = (availableMargin() * BigInt(percent)) / 100n;
+          const input = side === "long" ? longInput : shortInput;
+          input.value = centsToInput(cents);
+          const message = side === "long" ? longMessage : shortMessage;
+          message.className = "order-message";
+          validateOrder(side);
+        });
+      });
+
+      longInput.addEventListener("input", () => { longMessage.className = "order-message"; validateOrder("long"); });
+      shortInput.addEventListener("input", () => { shortMessage.className = "order-message"; validateOrder("short"); });
+      longButton.addEventListener("click", () => openPosition("long"));
+      shortButton.addEventListener("click", () => openPosition("short"));
+      document.getElementById("close-position").addEventListener("click", closeActivePosition);
+      document.getElementById("position-switcher").addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-position-id]");
+        if (!button) return;
+        const id = Number.parseInt(button.dataset.positionId ?? "", 10);
+        if (!Number.isSafeInteger(id) || !positions.some((position) => position.id === id)) return;
+        activePositionId = id;
+        renderPositionPanel();
+      });
+
+      renderChart(selectedSymbol);
+      renderState();
+      window.setInterval(tickPrices, 2500);
+    </script>
+  </body>
+</html>

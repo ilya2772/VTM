@@ -1,0 +1,29 @@
+# dependencies
+/node_modules
+
+# Next.js
+/.next
+/out
+
+# tests
+/coverage
+/playwright-report
+/test-results
+
+# local environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# logs and operating-system files
+*.log
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# licensed TradingView Advanced Charts assets
+/public/charting_library
+/public/datafeeds

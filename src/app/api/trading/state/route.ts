@@ -1,0 +1,174 @@
+import { NextRequest, NextResponse } from "next/server";
+
+import { Decimal } from "@/server/execution";
+import { requireSession } from "@/server/auth/session";
+import { prisma } from "@/server/db/client";
+import { calculatePnl } from "@/server/execution";
+import { demoTick } from "@/server/market-data";
+import { errorResponse } from "@/server/http/api-error";
+import { getRequestContext } from "@/server/security/request-context";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  const context = getRequestContext(request);
+  try {
+    const session = await requireSession(request);
+    const now = new Date();
+    const sequence = Math.floor(now.getTime() / 1000);
+    const account = await prisma.tradingAccount.findFirstOrThrow({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "asc" },
+      include: {
+        challenges: {
+          orderBy: { startedAt: "desc" },
+          take: 1,
+          include: {
+            rules: true,
+            violations: {
+              where: { resolvedAt: null },
+              orderBy: { occurredAt: "desc" },
+            },
+          },
+        },
+        positions: {
+          where: { status: "OPEN" },
+          include: { instrument: true },
+          orderBy: { openedAt: "desc" },
+        },
+        orders: {
+          where: { status: { in: ["PENDING", "OPEN", "PARTIALLY_FILLED"] } },
+          include: { instrument: true },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        },
+        trades: {
+          include: { instrument: true },
+          orderBy: { openedAt: "desc" },
+          take: 10,
+        },
+      },
+    });
+    const instruments = await prisma.instrument.findMany({
+      where: { isActive: true },
+      orderBy: { symbol: "asc" },
+    });
+    const positions = account.positions.map((position) => {
+      const mark = demoTick(position.instrument.symbol, sequence, now).price;
+      const unrealizedPnl = calculatePnl({
+        side: position.side,
+        quantity: position.quantity.toString(),
+        entryPrice: position.entryPrice.toString(),
+        exitPrice: mark,
+      });
+      return {
+        id: position.id,
+        instrumentId: position.instrumentId,
+        symbol: position.instrument.symbol,
+        side: position.side,
+        quantity: position.quantity.toString(),
+        entryPrice: position.entryPrice.toString(),
+        markPrice: mark.toString(),
+        leverage: position.leverage.toString(),
+        liquidationPrice: position.liquidationPrice?.toString() ?? null,
+        stopLoss: position.stopLoss?.toString() ?? null,
+        takeProfit: position.takeProfit?.toString() ?? null,
+        unrealizedPnl: unrealizedPnl.toString(),
+      };
+    });
+    const totalUnrealized = positions.reduce(
+      (sum, position) => sum.plus(position.unrealizedPnl),
+      new Decimal(0),
+    );
+    const equity = new Decimal(account.balance.toString()).plus(
+      totalUnrealized,
+    );
+    const challenge = account.challenges[0];
+    const dailyStart = new Decimal(
+      challenge?.dailyStartingEquity.toString() ??
+        account.initialBalance.toString(),
+    );
+    const initialBalance = new Decimal(account.initialBalance.toString());
+    const dailyDrawdownPct = dailyStart.isZero()
+      ? new Decimal(0)
+      : Decimal.max(dailyStart.minus(equity), 0).div(dailyStart).mul(100);
+    const overallDrawdownPct = Decimal.max(initialBalance.minus(equity), 0)
+      .div(initialBalance)
+      .mul(100);
+    return NextResponse.json({
+      user: session.user,
+      account: {
+        id: account.id,
+        status: account.status,
+        currency: account.currency,
+        initialBalance: account.initialBalance.toString(),
+        balance: account.balance.toString(),
+        equity: equity.toString(),
+        unrealizedPnl: totalUnrealized.toString(),
+      },
+      challenge: challenge
+        ? {
+            id: challenge.id,
+            status: challenge.status,
+            peakEquity: challenge.peakEquity.toString(),
+            dailyStartingEquity: challenge.dailyStartingEquity.toString(),
+            tradingDays: challenge.tradingDays,
+            rules: challenge.rules
+              ? {
+                  profitTargetPct: challenge.rules.profitTargetPct.toString(),
+                  maxDailyLossPct: challenge.rules.maxDailyLossPct.toString(),
+                  maxOverallLossPct:
+                    challenge.rules.maxOverallLossPct.toString(),
+                  minTradingDays: challenge.rules.minTradingDays,
+                  timezone: challenge.rules.timezone,
+                  maxLeverage: challenge.rules.maxLeverage.toString(),
+                }
+              : null,
+            violations: challenge.violations.map((violation) => ({
+              id: violation.id,
+              type: violation.type,
+              message: violation.message,
+              blocksTrading: violation.blocksTrading,
+            })),
+          }
+        : null,
+      instruments: instruments.map((instrument) => ({
+        id: instrument.id,
+        symbol: instrument.symbol,
+        displayName: instrument.displayName,
+        baseAsset: instrument.baseAsset,
+        quoteAsset: instrument.quoteAsset,
+        source: instrument.source,
+      })),
+      positions,
+      risk: {
+        dailyDrawdownPct: dailyDrawdownPct.toDecimalPlaces(8).toString(),
+        overallDrawdownPct: overallDrawdownPct.toDecimalPlaces(8).toString(),
+      },
+      orders: account.orders.map((order) => ({
+        id: order.id,
+        symbol: order.instrument.symbol,
+        type: order.type,
+        side: order.side,
+        status: order.status,
+        quantity: order.quantity.toString(),
+        limitPrice: order.limitPrice?.toString() ?? null,
+        stopPrice: order.stopPrice?.toString() ?? null,
+      })),
+      trades: account.trades.map((trade) => ({
+        id: trade.id,
+        symbol: trade.instrument.symbol,
+        action: trade.action,
+        side: trade.side,
+        quantity: trade.quantity.toString(),
+        realizedPnl: trade.realizedPnl.toString(),
+        openedAt: trade.openedAt.toISOString(),
+        closedAt: trade.closedAt?.toISOString() ?? null,
+      })),
+      serverTime: now.toISOString(),
+    });
+  } catch (error) {
+    return errorResponse(error, context.requestId);
+  }
+}
