@@ -1309,6 +1309,17 @@ a:focus-visible,
   margin-left: auto;
   font-size: 8px;
 }
+.tv-frame {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  background: #080d13;
+}
+.tradingview-widget-container,
+.tradingview-widget-container__widget {
+  width: 100%;
+  height: 100%;
+}
 .chart-provider-frame {
   position: relative;
   min-height: 0;

@@ -16,12 +16,9 @@ import {
   vi,
 } from "vitest";
 
-vi.mock("@/features/terminal/components/chart-provider-view", () => ({
-  ChartProviderView: () => (
-    <div>
-      DEMO DATA · Lightweight Charts fallback · drawings and advanced indicators
-      unavailable
-    </div>
+vi.mock("@/features/terminal/components/tradingview-widget", () => ({
+  TradingViewWidget: () => (
+    <div>TradingView tools · PYTH:BTCUSD market data</div>
   ),
 }));
 
@@ -197,14 +194,12 @@ describe("HomePage", () => {
 
   afterAll(() => vi.unstubAllGlobals());
 
-  it("renders server-backed account data and the fallback chart disclosure", async () => {
+  it("renders server-backed account data and the TradingView PYTH chart", async () => {
     render(<HomePage />);
     expect(await screen.findByText("AXIOM")).toBeInTheDocument();
     expect(screen.getAllByText("$50,000.00").length).toBeGreaterThan(0);
     expect(
-      screen.getByText(
-        "DEMO DATA · Lightweight Charts fallback · drawings and advanced indicators unavailable",
-      ),
+      screen.getByText("TradingView tools · PYTH:BTCUSD market data"),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1M" })).toBeInTheDocument();
   });

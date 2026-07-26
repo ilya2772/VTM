@@ -30,7 +30,6 @@ interface Props {
   state: TerminalState;
   selectedInstrumentId: string;
   timeframe: string;
-  chartType: string;
   theme: "dark" | "light";
   busy: boolean;
   message: string;
@@ -282,8 +281,8 @@ export function ProductWorkspaces(props: Props) {
             <strong>{props.timeframe}</strong>
           </div>
           <div>
-            <span>Chart type</span>
-            <strong>{props.chartType}</strong>
+            <span>Chart provider</span>
+            <strong>TradingView · PYTH</strong>
           </div>
           <label>
             Theme

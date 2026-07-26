@@ -12,7 +12,7 @@ import {
 
 import { chartResolutions } from "@/shared/chart";
 
-import { ChartProviderView } from "./components/chart-provider-view";
+import { TradingViewWidget } from "./components/tradingview-widget";
 import {
   ProductWorkspaces,
   productWorkspaces,
@@ -326,22 +326,6 @@ export function IntegratedTerminal() {
     !state.challenge.violations.some((violation) => violation.blocksTrading) &&
     connection === "DEMO" &&
     orderFieldsValid;
-  const chartTrades = useMemo(
-    () =>
-      state && instrument
-        ? state.trades
-            .filter((trade) => trade.symbol === instrument.symbol)
-            .map((trade) => ({
-              id: trade.id,
-              side: trade.side,
-              action: trade.action,
-              openedAt: trade.openedAt,
-              closedAt: trade.closedAt,
-            }))
-        : [],
-    [instrument, state],
-  );
-
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -949,12 +933,10 @@ export function IntegratedTerminal() {
                 Fullscreen
               </button>
             </div>
-            <ChartProviderView
+            <TradingViewWidget
               symbol={instrument.symbol}
               timeframe={timeframe}
-              trades={chartTrades}
-              initialKind={chartType}
-              onKindChange={setChartType}
+              theme={theme}
             />
           </div>
 
@@ -1520,7 +1502,6 @@ export function IntegratedTerminal() {
             state={state}
             selectedInstrumentId={instrument.id}
             timeframe={timeframe}
-            chartType={chartType}
             theme={theme}
             busy={busy}
             message={message}
