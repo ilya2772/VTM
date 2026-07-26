@@ -6,7 +6,11 @@ import { assertSameOrigin } from "@/server/security/csrf";
 import { getRequestContext } from "@/server/security/request-context";
 import { getAuthoritativeTick } from "@/server/trading/price";
 import { cancelOrderSchema, placeOrderSchema } from "@/server/trading/schema";
-import { cancelOrder, placeOrder } from "@/server/trading/service";
+import {
+  cancelOrder,
+  placeOrder,
+  previewOrder,
+} from "@/server/trading/service";
 
 export const runtime = "nodejs";
 
@@ -20,8 +24,18 @@ export async function POST(request: NextRequest) {
       throw new ApiError(400, "VALIDATION_ERROR", "Order input is invalid.");
     const now = new Date();
     const tick = await getAuthoritativeTick(parsed.data.instrumentId, now);
+    const preview = await previewOrder(
+      { ...parsed.data, userId: session.user.id },
+      tick,
+      now,
+    );
     const result = await placeOrder(
-      { ...parsed.data, userId: session.user.id, requestId: context.requestId },
+      {
+        ...parsed.data,
+        quantity: preview.quantity,
+        userId: session.user.id,
+        requestId: context.requestId,
+      },
       tick,
       now,
     );
@@ -30,6 +44,7 @@ export async function POST(request: NextRequest) {
         orderId: result.order.id,
         status: result.order.status,
         replayed: result.replayed,
+        preview,
       },
       {
         status: result.replayed ? 200 : 201,

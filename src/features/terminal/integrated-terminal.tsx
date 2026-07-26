@@ -10,26 +10,32 @@ import {
   useState,
 } from "react";
 
-import { TradingViewWidget } from "./components/tradingview-widget";
-import type { StreamTick, TerminalState } from "./types";
+import { chartResolutions } from "@/shared/chart";
 
-const timeframes = [
-  "1m",
-  "5m",
-  "15m",
-  "30m",
-  "1h",
-  "2h",
-  "4h",
-  "6h",
-  "12h",
-  "1D",
-  "1W",
-  "1M",
-] as const;
+import { ChartProviderView } from "./components/chart-provider-view";
+import {
+  ProductWorkspaces,
+  productWorkspaces,
+  type ProductWorkspace,
+} from "./product-workspaces";
+import type { OrderPreview, StreamTick, TerminalState } from "./types";
+
+const timeframes = chartResolutions;
 type OrderKind = "MARKET" | "LIMIT" | "STOP_LIMIT";
 type Side = "LONG" | "SHORT";
 type Activity = "POSITIONS" | "ORDERS" | "HISTORY" | "RISK";
+type SizeUnit = "USD" | "ASSET";
+
+interface OrderConfirmation {
+  side: Side;
+  idempotencyKey: string;
+}
+
+interface PositionEditor {
+  positionId: string;
+  stopLoss: string;
+  takeProfit: string;
+}
 
 function money(value: string, signed = false) {
   const amount = new Decimal(value);
@@ -50,6 +56,68 @@ function isStreamTick(value: unknown): value is StreamTick {
     typeof value.symbol === "string" &&
     typeof value.price === "string"
   );
+}
+
+function isPositiveInput(value: string): boolean {
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
+  try {
+    return new Decimal(value).gt(0);
+  } catch {
+    return false;
+  }
+}
+
+function isOrderPreview(value: unknown): value is OrderPreview {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "quantity" in value &&
+    "expectedExecutionPrice" in value &&
+    "fee" in value &&
+    "orderStatus" in value &&
+    typeof value.quantity === "string" &&
+    typeof value.expectedExecutionPrice === "string" &&
+    typeof value.fee === "string" &&
+    (value.orderStatus === "FILLED" || value.orderStatus === "OPEN")
+  );
+}
+
+function responseError(payload: unknown, fallback: string): string {
+  return typeof payload === "object" &&
+    payload !== null &&
+    "error" in payload &&
+    typeof payload.error === "object" &&
+    payload.error !== null &&
+    "message" in payload.error &&
+    typeof payload.error.message === "string"
+    ? payload.error.message
+    : fallback;
+}
+
+function livePositionPnl(
+  position: TerminalState["positions"][number],
+  liveMark: string,
+): Decimal {
+  const mark = isPositiveInput(liveMark)
+    ? new Decimal(liveMark)
+    : new Decimal(position.markPrice);
+  const move =
+    position.side === "LONG"
+      ? mark.minus(position.entryPrice)
+      : new Decimal(position.entryPrice).minus(mark);
+  return move.mul(position.quantity).toDecimalPlaces(8);
+}
+
+function livePositionPnlPct(
+  position: TerminalState["positions"][number],
+  pnl: Decimal,
+): Decimal {
+  const margin = new Decimal(position.quantity)
+    .mul(position.entryPrice)
+    .div(position.leverage);
+  return margin.gt(0)
+    ? pnl.div(margin).mul(100).toDecimalPlaces(4)
+    : new Decimal(0);
 }
 
 function LoginPanel({ onAuthenticated }: { onAuthenticated(): Promise<void> }) {
@@ -114,6 +182,9 @@ export function IntegratedTerminal() {
   const [authRequired, setAuthRequired] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedInstrumentId, setSelectedInstrumentId] = useState("");
+  const [workspace, setWorkspace] = useState<ProductWorkspace>("Trade");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [chartType, setChartType] = useState("Candles");
   const [tick, setTick] = useState<StreamTick | null>(null);
   const [connection, setConnection] =
     useState<StreamTick["connection"]>("RECONNECTING");
@@ -121,11 +192,31 @@ export function IntegratedTerminal() {
     useState<(typeof timeframes)[number]>("15m");
   const [orderKind, setOrderKind] = useState<OrderKind>("MARKET");
   const [amount, setAmount] = useState("1000");
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>("USD");
   const [leverage, setLeverage] = useState("1");
   const [limitPrice, setLimitPrice] = useState("");
   const [stopPrice, setStopPrice] = useState("");
+  const [stopLoss, setStopLoss] = useState("");
+  const [takeProfit, setTakeProfit] = useState("");
+  const [previews, setPreviews] = useState<Partial<Record<Side, OrderPreview>>>(
+    {},
+  );
+  const [previewStatus, setPreviewStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const [previewErrors, setPreviewErrors] = useState<
+    Partial<Record<Side, string>>
+  >({});
   const [activity, setActivity] = useState<Activity>("POSITIONS");
-  const [confirmation, setConfirmation] = useState<Side | null>(null);
+  const [positionEditor, setPositionEditor] = useState<PositionEditor | null>(
+    null,
+  );
+  const [closeQuantities, setCloseQuantities] = useState<
+    Record<string, string>
+  >({});
+  const [confirmation, setConfirmation] = useState<OrderConfirmation | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const chartZone = useRef<HTMLDivElement>(null);
@@ -146,14 +237,46 @@ export function IntegratedTerminal() {
     setAuthRequired(false);
     setLoadError("");
     setSelectedInstrumentId(
-      (current) => current || next.instruments[0]?.id || "",
+      (current) =>
+        current ||
+        next.instruments.find(
+          (item) => item.symbol === next.chartLayout?.symbol,
+        )?.id ||
+        next.instruments[0]?.id ||
+        "",
     );
+    if (next.chartLayout) {
+      if (timeframes.some((item) => item === next.chartLayout?.timeframe))
+        setTimeframe(next.chartLayout.timeframe as (typeof timeframes)[number]);
+      setChartType(next.chartLayout.chartType);
+      setTheme(next.chartLayout.theme);
+      document.documentElement.dataset.theme = next.chartLayout.theme;
+    }
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadState(), 0);
     return () => window.clearTimeout(timer);
   }, [loadState]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = window.localStorage?.getItem("axiom.chart.timeframe");
+        const saved = timeframes.find((item) => item === stored);
+        if (saved) setTimeframe(saved);
+      } catch {
+        // Storage is optional in privacy-restricted browser contexts.
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem("axiom.chart.timeframe", timeframe);
+    } catch {
+      // Keep the in-memory selection when storage is unavailable.
+    }
+  }, [timeframe]);
   useEffect(() => {
     if (!state) return;
     const timer = window.setInterval(() => void loadState(), 5000);
@@ -188,6 +311,112 @@ export function IntegratedTerminal() {
     events.onerror = () => setConnection("RECONNECTING");
     return () => events.close();
   }, [instrument]);
+
+  const orderFieldsValid =
+    isPositiveInput(amount) &&
+    isPositiveInput(leverage) &&
+    (orderKind === "MARKET" || isPositiveInput(limitPrice)) &&
+    (orderKind !== "STOP_LIMIT" || isPositiveInput(stopPrice)) &&
+    (!stopLoss || isPositiveInput(stopLoss)) &&
+    (!takeProfit || isPositiveInput(takeProfit));
+  const previewAllowed =
+    Boolean(state && instrument) &&
+    state?.account.status === "ACTIVE" &&
+    state.challenge?.status === "ACTIVE" &&
+    !state.challenge.violations.some((violation) => violation.blocksTrading) &&
+    connection === "DEMO" &&
+    orderFieldsValid;
+  const chartTrades = useMemo(
+    () =>
+      state && instrument
+        ? state.trades
+            .filter((trade) => trade.symbol === instrument.symbol)
+            .map((trade) => ({
+              id: trade.id,
+              side: trade.side,
+              action: trade.action,
+              openedAt: trade.openedAt,
+              closedAt: trade.closedAt,
+            }))
+        : [],
+    [instrument, state],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      if (!previewAllowed || !state || !instrument) {
+        setPreviews({});
+        setPreviewErrors({});
+        setPreviewStatus("idle");
+        return;
+      }
+      setPreviewStatus("loading");
+      setPreviewErrors({});
+      const requestPreview = async (side: Side) => {
+        const response = await fetch("/api/trading/orders/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountId: state.account.id,
+            instrumentId: instrument.id,
+            type: orderKind,
+            side,
+            size: amount,
+            sizeUnit,
+            leverage,
+            ...(orderKind !== "MARKET" ? { limitPrice } : {}),
+            ...(orderKind === "STOP_LIMIT" ? { stopPrice } : {}),
+            ...(stopLoss ? { stopLoss } : {}),
+            ...(takeProfit ? { takeProfit } : {}),
+          }),
+          signal: controller.signal,
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok)
+          throw new Error(responseError(payload, "Order preview failed."));
+        if (!isOrderPreview(payload))
+          throw new Error("Order preview response is invalid.");
+        return payload;
+      };
+      void Promise.allSettled([
+        requestPreview("LONG"),
+        requestPreview("SHORT"),
+      ]).then(([longResult, shortResult]) => {
+        if (controller.signal.aborted) return;
+        const nextPreviews: Partial<Record<Side, OrderPreview>> = {};
+        const nextErrors: Partial<Record<Side, string>> = {};
+        if (longResult.status === "fulfilled")
+          nextPreviews.LONG = longResult.value;
+        else nextErrors.LONG = longResult.reason.message;
+        if (shortResult.status === "fulfilled")
+          nextPreviews.SHORT = shortResult.value;
+        else nextErrors.SHORT = shortResult.reason.message;
+        setPreviews(nextPreviews);
+        setPreviewErrors(nextErrors);
+        setPreviewStatus(
+          nextPreviews.LONG || nextPreviews.SHORT ? "ready" : "error",
+        );
+      });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    amount,
+    connection,
+    instrument,
+    leverage,
+    limitPrice,
+    orderKind,
+    previewAllowed,
+    sizeUnit,
+    state,
+    stopLoss,
+    stopPrice,
+    takeProfit,
+  ]);
 
   if (authRequired) return <LoginPanel onAuthenticated={loadState} />;
   if (!state)
@@ -261,63 +490,87 @@ export function IntegratedTerminal() {
         : exposure.gte(25)
           ? 72
           : 92;
+  const confirmationPreview = confirmation
+    ? previews[confirmation.side]
+    : undefined;
+  const dailyRiskRemainingPct = rules
+    ? Decimal.max(
+        new Decimal(rules.maxDailyLossPct).minus(state.risk.dailyDrawdownPct),
+        0,
+      )
+    : null;
+  const overallRiskRemainingPct = rules
+    ? Decimal.max(
+        new Decimal(rules.maxOverallLossPct).minus(
+          state.risk.overallDrawdownPct,
+        ),
+        0,
+      )
+    : null;
+  const dailyRiskRemainingMoney = dailyRiskRemainingPct
+    ? new Decimal(state.challenge?.dailyStartingEquity ?? 0)
+        .mul(dailyRiskRemainingPct)
+        .div(100)
+    : null;
+  const overallRiskRemainingMoney = overallRiskRemainingPct
+    ? new Decimal(state.account.initialBalance)
+        .mul(overallRiskRemainingPct)
+        .div(100)
+    : null;
 
   function setQuickAmount(value: number) {
+    const usdSize = new Decimal(currentState.account.balance)
+      .mul(value)
+      .div(100);
+    if (sizeUnit === "ASSET" && !new Decimal(mark).gt(0)) {
+      setMessage("Asset sizing requires a current server price.");
+      return;
+    }
     setAmount(
-      new Decimal(currentState.account.balance)
-        .mul(value)
-        .div(100)
-        .toDecimalPlaces(2)
-        .toFixed(2),
+      sizeUnit === "USD"
+        ? usdSize.toDecimalPlaces(2).toFixed(2)
+        : usdSize.div(mark).toDecimalPlaces(12).toFixed(12),
     );
   }
 
-  async function executeOrder(side: Side) {
-    if (
-      !canTrade ||
-      !new Decimal(amount || 0).gt(0) ||
-      !new Decimal(mark).gt(0)
-    )
-      return;
+  function openConfirmation(side: Side) {
+    if (!previews[side] || !canTrade || busy) return;
+    setConfirmation({ side, idempotencyKey: crypto.randomUUID() });
+  }
+
+  async function executeOrder(order: OrderConfirmation) {
+    const preview = previews[order.side];
+    if (!canTrade || !orderFieldsValid || !preview) return;
     setBusy(true);
     setMessage("");
-    const quantity = new Decimal(amount)
-      .div(mark)
-      .toDecimalPlaces(12)
-      .toFixed(12);
     const response = await fetch("/api/trading/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         accountId: currentState.account.id,
         instrumentId: currentInstrument.id,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: order.idempotencyKey,
         type: orderKind,
-        side,
-        quantity,
+        side: order.side,
+        size: amount,
+        sizeUnit,
         leverage,
         ...(orderKind !== "MARKET" ? { limitPrice } : {}),
         ...(orderKind === "STOP_LIMIT" ? { stopPrice } : {}),
+        ...(stopLoss ? { stopLoss } : {}),
+        ...(takeProfit ? { takeProfit } : {}),
       }),
     });
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
-      const apiMessage =
-        typeof payload === "object" &&
-        payload !== null &&
-        "error" in payload &&
-        typeof payload.error === "object" &&
-        payload.error !== null &&
-        "message" in payload.error &&
-        typeof payload.error.message === "string"
-          ? payload.error.message
-          : "Ордер отклонён.";
-      setMessage(apiMessage);
+      setMessage(responseError(payload, "Ордер отклонён."));
     } else {
       setMessage(
         orderKind === "MARKET"
-          ? `${side} позиция открыта.`
-          : "Ордер принят сервером.",
+          ? `${order.side} позиция открыта.`
+          : preview.orderStatus === "FILLED"
+            ? `${order.side} позиция открыта.`
+            : "Виртуальный ордер принят сервером.",
       );
       await loadState();
     }
@@ -325,7 +578,36 @@ export function IntegratedTerminal() {
     setConfirmation(null);
   }
 
-  async function closePosition(position: TerminalState["positions"][number]) {
+  function setClosePercent(
+    position: TerminalState["positions"][number],
+    percentValue: number,
+  ) {
+    setCloseQuantities((current) => ({
+      ...current,
+      [position.id]: new Decimal(position.quantity)
+        .mul(percentValue)
+        .div(100)
+        .toDecimalPlaces(12)
+        .toString(),
+    }));
+  }
+
+  async function closePosition(
+    position: TerminalState["positions"][number],
+    quantityOverride?: string,
+  ) {
+    const quantity =
+      quantityOverride ?? closeQuantities[position.id] ?? position.quantity;
+    if (
+      !isPositiveInput(quantity) ||
+      new Decimal(quantity).gt(position.quantity)
+    ) {
+      setMessage(
+        "Close quantity must be positive and not exceed the position.",
+      );
+      return;
+    }
+    const partial = new Decimal(quantity).lt(position.quantity);
     setBusy(true);
     setMessage("");
     const response = await fetch("/api/trading/positions/close", {
@@ -335,14 +617,61 @@ export function IntegratedTerminal() {
         accountId: currentState.account.id,
         instrumentId: position.instrumentId,
         positionId: position.id,
-        quantity: position.quantity,
+        quantity,
         idempotencyKey: crypto.randomUUID(),
       }),
     });
+    const payload: unknown = await response.json().catch(() => null);
     setMessage(
-      response.ok ? "Позиция закрыта." : "Не удалось закрыть позицию.",
+      response.ok
+        ? partial
+          ? "Позиция частично закрыта."
+          : "Позиция закрыта."
+        : responseError(payload, "Не удалось закрыть позицию."),
     );
-    if (response.ok) await loadState();
+    if (response.ok) {
+      setCloseQuantities((current) => {
+        const next = { ...current };
+        delete next[position.id];
+        return next;
+      });
+      await loadState();
+    }
+    setBusy(false);
+  }
+
+  async function savePositionTargets(
+    position: TerminalState["positions"][number],
+  ) {
+    if (!positionEditor || positionEditor.positionId !== position.id) return;
+    if (
+      (positionEditor.stopLoss && !isPositiveInput(positionEditor.stopLoss)) ||
+      (positionEditor.takeProfit && !isPositiveInput(positionEditor.takeProfit))
+    ) {
+      setMessage("SL and TP must be positive decimal values or empty.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    const response = await fetch("/api/trading/positions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: currentState.account.id,
+        instrumentId: position.instrumentId,
+        positionId: position.id,
+        stopLoss: positionEditor.stopLoss || null,
+        takeProfit: positionEditor.takeProfit || null,
+      }),
+    });
+    const payload: unknown = await response.json().catch(() => null);
+    if (response.ok) {
+      setMessage("Защитные уровни позиции обновлены.");
+      setPositionEditor(null);
+      await loadState();
+    } else {
+      setMessage(responseError(payload, "Не удалось обновить SL/TP."));
+    }
     setBusy(false);
   }
 
@@ -356,6 +685,38 @@ export function IntegratedTerminal() {
     setMessage(response.ok ? "Ордер отменён." : "Не удалось отменить ордер.");
     if (response.ok) await loadState();
     setBusy(false);
+  }
+
+  async function savePreference(body: object) {
+    setBusy(true);
+    setMessage("");
+    const response = await fetch("/api/terminal/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setMessage(
+      response.ok ? "Настройки сохранены." : "Не удалось сохранить настройки.",
+    );
+    if (response.ok) await loadState();
+    setBusy(false);
+  }
+
+  async function toggleWatchlist(instrumentId: string, enabled: boolean) {
+    await savePreference({ kind: "WATCHLIST", instrumentId, enabled });
+  }
+
+  async function saveLayout(nextTheme: "dark" | "light") {
+    if (!instrument) return;
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    await savePreference({
+      kind: "CHART_LAYOUT",
+      symbol: instrument.symbol,
+      timeframe,
+      chartType,
+      theme: nextTheme,
+    });
   }
 
   return (
@@ -384,7 +745,7 @@ export function IntegratedTerminal() {
             Data source<strong>{instrument.source}</strong>
           </span>
           <span>
-            Chart<strong>TradingView public</strong>
+            Chart<strong>Axiom demo</strong>
           </span>
           <span>
             Execution<strong>Axiom server</strong>
@@ -413,18 +774,38 @@ export function IntegratedTerminal() {
         </div>
       </header>
 
+      <nav className="fusion-primary-nav" aria-label="Primary navigation">
+        {productWorkspaces.map((item) => (
+          <button
+            key={item}
+            aria-current={workspace === item ? "page" : undefined}
+            className={workspace === item ? "active" : ""}
+            onClick={() => setWorkspace(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </nav>
+
       <main className="fusion-terminal">
         <nav className="fusion-rail" aria-label="Разделы терминала">
-          <span className="active" title="Торговля">
-            ▦
-          </span>
-          <span title="Аналитика">⌁</span>
-          <span title="Журнал">▤</span>
-          <span title="Риск">◇</span>
-          <i />
-          <span title="Настройки">⚙</span>
+          {productWorkspaces.map((item) => (
+            <button
+              key={item}
+              title={item}
+              aria-label={item}
+              className={workspace === item ? "active" : ""}
+              onClick={() => setWorkspace(item)}
+            >
+              {item.slice(0, 1)}
+            </button>
+          ))}
         </nav>
-        <aside className="fusion-leftbar" aria-label="Прогресс и рынки">
+        <aside
+          hidden={workspace !== "Trade"}
+          className="fusion-leftbar"
+          aria-label="Прогресс и рынки"
+        >
           <section>
             <div className="fusion-section-title">
               <h2>Challenge progress</h2>
@@ -474,6 +855,35 @@ export function IntegratedTerminal() {
           </section>
           <section>
             <div className="fusion-section-title">
+              <h2>Recent trades</h2>
+              <span>{state.trades.length}</span>
+            </div>
+            <div className="fusion-recent-trades">
+              {state.trades.length ? (
+                state.trades.slice(0, 3).map((trade) => (
+                  <div key={trade.id}>
+                    <span>
+                      <strong>
+                        {trade.symbol.replace("/", "")} {trade.side}
+                      </strong>
+                      <small>{trade.action}</small>
+                    </span>
+                    <em
+                      className={
+                        new Decimal(trade.realizedPnl).gte(0) ? "green" : "red"
+                      }
+                    >
+                      {money(trade.realizedPnl, true)}
+                    </em>
+                  </div>
+                ))
+              ) : (
+                <small>No simulated trades yet.</small>
+              )}
+            </div>
+          </section>
+          <section>
+            <div className="fusion-section-title">
               <h2>Markets</h2>
               <span>{state.instruments.length}</span>
             </div>
@@ -512,6 +922,7 @@ export function IntegratedTerminal() {
         </aside>
 
         <section
+          hidden={workspace !== "Trade"}
           className="fusion-workspace"
           id="trade-workspace"
           aria-label="Торговый терминал"
@@ -538,9 +949,12 @@ export function IntegratedTerminal() {
                 Fullscreen
               </button>
             </div>
-            <TradingViewWidget
+            <ChartProviderView
               symbol={instrument.symbol}
               timeframe={timeframe}
+              trades={chartTrades}
+              initialKind={chartType}
+              onKindChange={setChartType}
             />
           </div>
 
@@ -566,13 +980,27 @@ export function IntegratedTerminal() {
             </div>
             <div className="fusion-order-fields">
               <label>
-                Size (USD)
+                Size ({sizeUnit === "USD" ? "USD" : instrument.baseAsset})
                 <input
-                  aria-label="Размер позиции в USD"
+                  aria-label="Order size"
                   inputMode="decimal"
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
                 />
+              </label>
+              <label>
+                Unit
+                <select
+                  aria-label="Size unit"
+                  value={sizeUnit}
+                  onChange={(event) => {
+                    if (event.target.value === "USD") setSizeUnit("USD");
+                    if (event.target.value === "ASSET") setSizeUnit("ASSET");
+                  }}
+                >
+                  <option value="USD">USD</option>
+                  <option value="ASSET">{instrument.baseAsset}</option>
+                </select>
               </label>
               <label>
                 Leverage
@@ -608,6 +1036,26 @@ export function IntegratedTerminal() {
                   />
                 </label>
               )}
+              <label>
+                Stop Loss
+                <input
+                  aria-label="Stop Loss"
+                  inputMode="decimal"
+                  placeholder="Optional"
+                  value={stopLoss}
+                  onChange={(event) => setStopLoss(event.target.value)}
+                />
+              </label>
+              <label>
+                Take Profit
+                <input
+                  aria-label="Take Profit"
+                  inputMode="decimal"
+                  placeholder="Optional"
+                  value={takeProfit}
+                  onChange={(event) => setTakeProfit(event.target.value)}
+                />
+              </label>
             </div>
             <div className="fusion-percent-row" aria-label="Quick size">
               {[10, 25, 50, 75, 100].map((value) => (
@@ -624,20 +1072,33 @@ export function IntegratedTerminal() {
                 </div>
                 <dl>
                   <div>
-                    <dt>Expected mark</dt>
-                    <dd>{new Decimal(mark).gt(0) ? money(mark) : "N/A"}</dd>
+                    <dt>Expected execution</dt>
+                    <dd>
+                      {previews.LONG
+                        ? money(previews.LONG.expectedExecutionPrice)
+                        : "N/A"}
+                    </dd>
                   </div>
                   <div>
-                    <dt>Execution</dt>
-                    <dd>Simulated</dd>
+                    <dt>Fee / margin</dt>
+                    <dd>
+                      {previews.LONG
+                        ? `${money(previews.LONG.fee)} / ${money(previews.LONG.initialMargin)}`
+                        : "N/A"}
+                    </dd>
                   </div>
                 </dl>
                 <button
-                  disabled={!canTrade || busy}
-                  onClick={() => setConfirmation("LONG")}
+                  disabled={!canTrade || busy || !previews.LONG}
+                  onClick={() => openConfirmation("LONG")}
                 >
-                  Open Long
+                  {previewStatus === "loading" ? "Calculating…" : "Open Long"}
                 </button>
+                {previewErrors.LONG && (
+                  <small className="fusion-preview-error">
+                    {previewErrors.LONG}
+                  </small>
+                )}
               </article>
               <article className="fusion-score-card">
                 <span>Risk Score</span>
@@ -659,20 +1120,33 @@ export function IntegratedTerminal() {
                 </div>
                 <dl>
                   <div>
-                    <dt>Expected mark</dt>
-                    <dd>{new Decimal(mark).gt(0) ? money(mark) : "N/A"}</dd>
+                    <dt>Expected execution</dt>
+                    <dd>
+                      {previews.SHORT
+                        ? money(previews.SHORT.expectedExecutionPrice)
+                        : "N/A"}
+                    </dd>
                   </div>
                   <div>
-                    <dt>Execution</dt>
-                    <dd>Simulated</dd>
+                    <dt>Fee / margin</dt>
+                    <dd>
+                      {previews.SHORT
+                        ? `${money(previews.SHORT.fee)} / ${money(previews.SHORT.initialMargin)}`
+                        : "N/A"}
+                    </dd>
                   </div>
                 </dl>
                 <button
-                  disabled={!canTrade || busy}
-                  onClick={() => setConfirmation("SHORT")}
+                  disabled={!canTrade || busy || !previews.SHORT}
+                  onClick={() => openConfirmation("SHORT")}
                 >
-                  Open Short
+                  {previewStatus === "loading" ? "Calculating…" : "Open Short"}
                 </button>
+                {previewErrors.SHORT && (
+                  <small className="fusion-preview-error">
+                    {previewErrors.SHORT}
+                  </small>
+                )}
               </article>
             </div>
             <p
@@ -687,7 +1161,11 @@ export function IntegratedTerminal() {
           </section>
         </section>
 
-        <aside className="fusion-rightbar" aria-label="Позиции и риск">
+        <aside
+          hidden={workspace !== "Trade"}
+          className="fusion-rightbar"
+          aria-label="Позиции и риск"
+        >
           <section className="fusion-right-card fusion-activity">
             <div className="fusion-position-tabs" role="tablist">
               {(["POSITIONS", "ORDERS", "HISTORY", "RISK"] as const).map(
@@ -707,48 +1185,177 @@ export function IntegratedTerminal() {
             </div>
             {activity === "POSITIONS" &&
               (selectedPositions.length ? (
-                selectedPositions.map((position) => (
-                  <article className="fusion-position" key={position.id}>
-                    <div>
-                      <strong>{position.symbol}</strong>
-                      <span className={position.side.toLowerCase()}>
-                        {position.side} {position.leverage}×
-                      </span>
-                    </div>
-                    <dl>
+                selectedPositions.map((position) => {
+                  const livePnl = livePositionPnl(position, mark);
+                  const livePnlPct = livePositionPnlPct(position, livePnl);
+                  const editing = positionEditor?.positionId === position.id;
+                  return (
+                    <article
+                      className="fusion-position"
+                      key={position.id}
+                      aria-label={`${position.side} position ${position.symbol}`}
+                    >
                       <div>
-                        <dt>Unrealized PnL</dt>
-                        <dd
-                          className={
-                            new Decimal(position.unrealizedPnl).gte(0)
-                              ? "green"
-                              : "red"
+                        <strong>{position.symbol}</strong>
+                        <span className={position.side.toLowerCase()}>
+                          {position.side} {position.leverage}× · {connection}
+                        </span>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Live unrealized PnL</dt>
+                          <dd className={livePnl.gte(0) ? "green" : "red"}>
+                            {money(livePnl.toString(), true)} ·{" "}
+                            {livePnlPct.toFixed(2)}%
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Quantity</dt>
+                          <dd>{new Decimal(position.quantity).toFixed(6)}</dd>
+                        </div>
+                        <div>
+                          <dt>Entry</dt>
+                          <dd>{money(position.entryPrice)}</dd>
+                        </div>
+                        <div>
+                          <dt>Live mark</dt>
+                          <dd>
+                            {new Decimal(mark).gt(0) ? money(mark) : "N/A"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Liquidation</dt>
+                          <dd>
+                            {position.liquidationPrice
+                              ? money(position.liquidationPrice)
+                              : "N/A"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Stop Loss</dt>
+                          <dd>
+                            {position.stopLoss
+                              ? money(position.stopLoss)
+                              : "N/A"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Take Profit</dt>
+                          <dd>
+                            {position.takeProfit
+                              ? money(position.takeProfit)
+                              : "N/A"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Source</dt>
+                          <dd>{instrument.source} · server tick</dd>
+                        </div>
+                      </dl>
+                      <div className="fusion-position-actions">
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            setPositionEditor(
+                              editing
+                                ? null
+                                : {
+                                    positionId: position.id,
+                                    stopLoss: position.stopLoss ?? "",
+                                    takeProfit: position.takeProfit ?? "",
+                                  },
+                            )
                           }
                         >
-                          {money(position.unrealizedPnl, true)}
-                        </dd>
+                          {editing ? "Cancel SL/TP edit" : "Edit SL/TP"}
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void closePosition(position, position.quantity)
+                          }
+                        >
+                          Close full
+                        </button>
                       </div>
-                      <div>
-                        <dt>Quantity</dt>
-                        <dd>{new Decimal(position.quantity).toFixed(6)}</dd>
+                      {editing && positionEditor && (
+                        <div className="fusion-position-editor">
+                          <label>
+                            Stop Loss
+                            <input
+                              aria-label={`Edit Stop Loss for ${position.side}`}
+                              inputMode="decimal"
+                              placeholder="N/A"
+                              value={positionEditor.stopLoss}
+                              onChange={(event) =>
+                                setPositionEditor({
+                                  ...positionEditor,
+                                  stopLoss: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Take Profit
+                            <input
+                              aria-label={`Edit Take Profit for ${position.side}`}
+                              inputMode="decimal"
+                              placeholder="N/A"
+                              value={positionEditor.takeProfit}
+                              onChange={(event) =>
+                                setPositionEditor({
+                                  ...positionEditor,
+                                  takeProfit: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <button
+                            disabled={busy}
+                            onClick={() => void savePositionTargets(position)}
+                          >
+                            Save SL/TP
+                          </button>
+                        </div>
+                      )}
+                      <div className="fusion-partial-close">
+                        <label>
+                          Close quantity
+                          <input
+                            aria-label={`Close quantity for ${position.side}`}
+                            inputMode="decimal"
+                            value={
+                              closeQuantities[position.id] ?? position.quantity
+                            }
+                            onChange={(event) =>
+                              setCloseQuantities((current) => ({
+                                ...current,
+                                [position.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <div>
+                          {[25, 50, 100].map((value) => (
+                            <button
+                              key={value}
+                              disabled={busy}
+                              onClick={() => setClosePercent(position, value)}
+                            >
+                              {value}%
+                            </button>
+                          ))}
+                          <button
+                            disabled={busy}
+                            onClick={() => void closePosition(position)}
+                          >
+                            Close quantity
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <dt>Entry</dt>
-                        <dd>{money(position.entryPrice)}</dd>
-                      </div>
-                      <div>
-                        <dt>Mark</dt>
-                        <dd>{money(mark)}</dd>
-                      </div>
-                    </dl>
-                    <button
-                      disabled={busy}
-                      onClick={() => void closePosition(position)}
-                    >
-                      Close position
-                    </button>
-                  </article>
-                ))
+                    </article>
+                  );
+                })
               ) : (
                 <div className="fusion-empty">
                   No open positions for {instrument.symbol}.<br />
@@ -764,7 +1371,10 @@ export function IntegratedTerminal() {
                         {order.symbol} {order.side}
                       </strong>
                       <small>
-                        {order.type} · {order.status}
+                        {order.type} · {order.status} · qty {order.quantity}
+                        <br />
+                        Limit {order.limitPrice ?? "N/A"} · Stop{" "}
+                        {order.stopPrice ?? "N/A"}
                       </small>
                     </span>
                     <button
@@ -787,8 +1397,10 @@ export function IntegratedTerminal() {
                         {trade.symbol} {trade.action}
                       </strong>
                       <small>
-                        {trade.side} ·{" "}
-                        {new Date(trade.openedAt).toLocaleString()}
+                        {trade.side} · qty {trade.quantity} ·{" "}
+                        {new Date(
+                          trade.closedAt ?? trade.openedAt,
+                        ).toLocaleString()}
                       </small>
                     </span>
                     <em
@@ -813,17 +1425,44 @@ export function IntegratedTerminal() {
                   </strong>
                 </p>
                 <p>
+                  Daily remaining{" "}
+                  <strong>
+                    {dailyRiskRemainingPct
+                      ? `${dailyRiskRemainingPct.toFixed(2)}% · ${money(dailyRiskRemainingMoney?.toString() ?? "0")}`
+                      : "N/A"}
+                  </strong>
+                </p>
+                <p>
                   Overall drawdown{" "}
                   <strong>
                     {percent(state.risk.overallDrawdownPct)} /{" "}
                     {rules ? percent(rules.maxOverallLossPct) : "—"}
                   </strong>
                 </p>
+                <p>
+                  Overall remaining{" "}
+                  <strong>
+                    {overallRiskRemainingPct
+                      ? `${overallRiskRemainingPct.toFixed(2)}% · ${money(overallRiskRemainingMoney?.toString() ?? "0")}`
+                      : "N/A"}
+                  </strong>
+                </p>
                 {state.challenge?.violations.map((violation) => (
                   <div className="fusion-violation" key={violation.id}>
+                    <strong>{violation.type}</strong>
+                    <br />
                     {violation.message}
+                    <br />
+                    {violation.blocksTrading
+                      ? "New orders are blocked by the server."
+                      : "Informational violation; trading remains available."}
                   </div>
                 ))}
+                {!state.challenge?.violations.length && (
+                  <div className="fusion-risk-ok">
+                    No active risk violations. New simulated orders are allowed.
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -843,8 +1482,21 @@ export function IntegratedTerminal() {
               />
             </div>
             <div className="fusion-bar-row">
-              <span>Overall</span>
-              <strong>{percent(state.risk.overallDrawdownPct)}</strong>
+              <span>Daily remaining</span>
+              <strong>
+                {dailyRiskRemainingPct
+                  ? percent(dailyRiskRemainingPct.toString())
+                  : "N/A"}
+              </strong>
+            </div>
+            <div className="fusion-bar-row">
+              <span>Overall / remaining</span>
+              <strong>
+                {percent(state.risk.overallDrawdownPct)} /{" "}
+                {overallRiskRemainingPct
+                  ? percent(overallRiskRemainingPct.toString())
+                  : "N/A"}
+              </strong>
             </div>
           </section>
           <section className="fusion-right-card fusion-coach">
@@ -862,6 +1514,24 @@ export function IntegratedTerminal() {
             <small>Rules are calculated by the Axiom server.</small>
           </section>
         </aside>
+        {workspace !== "Trade" && (
+          <ProductWorkspaces
+            workspace={workspace}
+            state={state}
+            selectedInstrumentId={instrument.id}
+            timeframe={timeframe}
+            chartType={chartType}
+            theme={theme}
+            busy={busy}
+            message={message}
+            onSelectInstrument={(id) => {
+              setSelectedInstrumentId(id);
+              setWorkspace("Trade");
+            }}
+            onToggleWatchlist={toggleWatchlist}
+            onSaveLayout={saveLayout}
+          />
+        )}
       </main>
       <footer className="fusion-footer">
         <span>
@@ -880,7 +1550,7 @@ export function IntegratedTerminal() {
             aria-labelledby="confirm-title"
           >
             <p className="micro-label">Final confirmation</p>
-            <h2 id="confirm-title">Confirm {confirmation}</h2>
+            <h2 id="confirm-title">Confirm {confirmation.side}</h2>
             <dl>
               <div>
                 <dt>Instrument</dt>
@@ -888,7 +1558,11 @@ export function IntegratedTerminal() {
               </div>
               <div>
                 <dt>Size</dt>
-                <dd>{money(amount)}</dd>
+                <dd>
+                  {sizeUnit === "USD"
+                    ? money(amount)
+                    : `${amount} ${instrument.baseAsset}`}
+                </dd>
               </div>
               <div>
                 <dt>Type</dt>
@@ -897,6 +1571,62 @@ export function IntegratedTerminal() {
               <div>
                 <dt>Leverage</dt>
                 <dd>{leverage}×</dd>
+              </div>
+              <div>
+                <dt>Asset quantity</dt>
+                <dd>{confirmationPreview?.quantity ?? "N/A"}</dd>
+              </div>
+              <div>
+                <dt>Expected execution</dt>
+                <dd>
+                  {confirmationPreview
+                    ? money(confirmationPreview.expectedExecutionPrice)
+                    : "N/A"}
+                </dd>
+              </div>
+              <div>
+                <dt>Fee / margin</dt>
+                <dd>
+                  {confirmationPreview
+                    ? `${money(confirmationPreview.fee)} / ${money(confirmationPreview.initialMargin)}`
+                    : "N/A"}
+                </dd>
+              </div>
+              <div>
+                <dt>Liquidation</dt>
+                <dd>
+                  {confirmationPreview?.liquidationPrice
+                    ? money(confirmationPreview.liquidationPrice)
+                    : "N/A at 1×"}
+                </dd>
+              </div>
+              <div>
+                <dt>Stop Loss / potential</dt>
+                <dd>
+                  {stopLoss && confirmationPreview?.potentialLoss
+                    ? `${money(stopLoss)} / ${money(confirmationPreview.potentialLoss, true)}`
+                    : "Not set"}
+                </dd>
+              </div>
+              <div>
+                <dt>Take Profit / potential</dt>
+                <dd>
+                  {takeProfit && confirmationPreview?.potentialProfit
+                    ? `${money(takeProfit)} / ${money(confirmationPreview.potentialProfit, true)}`
+                    : "Not set"}
+                </dd>
+              </div>
+              <div>
+                <dt>Risk / reward</dt>
+                <dd>
+                  {confirmationPreview?.riskReward
+                    ? `1 : ${confirmationPreview.riskReward}`
+                    : "N/A"}
+                </dd>
+              </div>
+              <div>
+                <dt>Server outcome</dt>
+                <dd>{confirmationPreview?.orderStatus ?? "N/A"}</dd>
               </div>
             </dl>
             <p>
@@ -912,12 +1642,14 @@ export function IntegratedTerminal() {
               </button>
               <button
                 className={
-                  confirmation === "LONG" ? "confirm-long" : "confirm-short"
+                  confirmation.side === "LONG"
+                    ? "confirm-long"
+                    : "confirm-short"
                 }
-                disabled={busy}
+                disabled={busy || !confirmationPreview}
                 onClick={() => void executeOrder(confirmation)}
               >
-                {busy ? "Submitting…" : `Confirm ${confirmation}`}
+                {busy ? "Submitting…" : `Confirm ${confirmation.side}`}
               </button>
             </div>
           </div>

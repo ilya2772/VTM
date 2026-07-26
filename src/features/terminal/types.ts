@@ -70,8 +70,26 @@ export interface TerminalState {
     side: string;
     quantity: string;
     realizedPnl: string;
+    entryPrice: string;
+    exitPrice: string | null;
+    fees: string;
     openedAt: string;
     closedAt: string | null;
+  }[];
+  watchlistInstrumentIds: string[];
+  chartLayout: null | {
+    symbol: string;
+    timeframe: string;
+    engine: string;
+    chartType: "Candles" | "Bars" | "Line" | "Area" | "Heikin Ashi";
+    theme: "dark" | "light";
+  };
+  leaderboard: {
+    userId: string;
+    displayName: string;
+    returnPct: string;
+    realizedPnl: string;
+    challengeStatus: "ACTIVE" | "PASSED" | "FAILED" | null;
   }[];
   serverTime: string;
 }
@@ -87,4 +105,18 @@ export interface StreamTick {
   volume: null;
   fundingRate: null;
   openInterest: null;
+}
+
+export interface OrderPreview {
+  quantity: string;
+  expectedExecutionPrice: string;
+  notional: string;
+  initialMargin: string;
+  fee: string;
+  liquidationPrice: string | null;
+  potentialProfit: string | null;
+  potentialLoss: string | null;
+  riskReward: string | null;
+  orderStatus: "FILLED" | "OPEN";
+  priceSource: "DEMO" | "PYTH";
 }

@@ -46,7 +46,7 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
-The checked-in environment example defaults to clearly identified demo market data and the open-source Lightweight Charts integration planned for a later stage. Replace placeholder database credentials locally; never commit real credentials.
+The checked-in environment example defaults to clearly identified demo market data and the open-source Lightweight Charts adapter. Replace placeholder database credentials locally; never commit real credentials.
 
 ## Commands
 
@@ -124,7 +124,15 @@ Authenticated, same-origin requests create or cancel orders through `/api/tradin
 
 The terminal UI adapts the project-root `index.html` concept into the Next.js application. Account, challenge, position, order, trade and risk panels load from the authenticated PostgreSQL-backed server state. Market, Limit and Stop Limit intents use the transactional API; the browser does not determine the authoritative execution result.
 
-The current chart is the official public TradingView embed and is explicitly labelled as a reference-only chart. It is not used as the execution price source: simulated execution continues to use the Axiom server demo feed. No licensed TradingView Advanced Charts assets are included. The custom `ChartProvider` and licensed/fallback datafeed work remains part of stage 9.
+The terminal uses the custom `ChartProvider` contract for symbol discovery, historical bars and leak-free live subscriptions. The default Lightweight Charts fallback reads Axiom's explicitly labelled demo history and SSE feed, supports all 12 planned timeframes, five available chart types, OHLC, trade markers, fullscreen, theme changes and local chart-setting persistence. Its missing drawing tools and advanced indicators are disclosed in the UI. Simulated execution continues to use the authoritative Axiom server feed; chart values are never accepted from the browser for execution.
+
+No licensed TradingView Advanced Charts assets are included or imitated. Advanced Charts must only be connected after official files have been obtained separately; until then the application stays on the honest Lightweight Charts fallback.
+
+The order ticket supports Market, Limit and Stop Limit for Long and Short, sizing in USD or asset units, leverage, quick percentages, Stop Loss and Take Profit. Before confirmation, the authenticated `/api/trading/orders/preview` endpoint converts size using the authoritative server price and validates account, challenge, stale-price and risk limits. The confirmation displays expected execution, fee, margin, liquidation, potential P/L and risk/reward. Submission reuses a stable idempotency key and repeats the same server calculations before creating any simulated order.
+
+Challenge progress, recent trades, positions, pending orders, history and risk limits are presented from the authenticated server state. Open-position PnL follows the selected instrument's live server tick without a page reload. Position controls update or clear protective targets and support exact partial or full simulated closes through server-authoritative APIs; pending orders can be cancelled. The risk panel shows daily and overall drawdown, remaining percentage and currency allowance, and explicit violation or trading-block explanations.
+
+Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are functional terminal workspaces rather than placeholders. Watchlist membership and the default chart layout are persisted for the authenticated user in PostgreSQL. Journal and analytics use recorded simulated trades, while the leaderboard ranks stored simulation accounts by realized return; unsupported market fields remain explicitly `N/A`.
 
 ## Secret-handling rules
 

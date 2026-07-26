@@ -54,6 +54,23 @@ export async function GET(request: NextRequest) {
       where: { isActive: true },
       orderBy: { symbol: "asc" },
     });
+    const [watchlist, chartLayout, leaderboardAccounts] = await Promise.all([
+      prisma.watchlist.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: "asc" },
+        select: { instrumentId: true },
+      }),
+      prisma.chartLayout.findUnique({
+        where: { userId_name: { userId: session.user.id, name: "default" } },
+      }),
+      prisma.tradingAccount.findMany({
+        orderBy: { createdAt: "asc" },
+        include: {
+          user: { select: { id: true, displayName: true } },
+          challenges: { orderBy: { startedAt: "desc" }, take: 1 },
+        },
+      }),
+    ]);
     const positions = account.positions.map((position) => {
       const mark = demoTick(position.instrument.symbol, sequence, now).price;
       const unrealizedPnl = calculatePnl({
@@ -163,9 +180,52 @@ export async function GET(request: NextRequest) {
         side: trade.side,
         quantity: trade.quantity.toString(),
         realizedPnl: trade.realizedPnl.toString(),
+        entryPrice: trade.entryPrice.toString(),
+        exitPrice: trade.exitPrice?.toString() ?? null,
+        fees: trade.fees.toString(),
         openedAt: trade.openedAt.toISOString(),
         closedAt: trade.closedAt?.toISOString() ?? null,
       })),
+      watchlistInstrumentIds: watchlist.map((item) => item.instrumentId),
+      chartLayout: chartLayout
+        ? {
+            symbol: chartLayout.symbol,
+            timeframe: chartLayout.timeframe,
+            engine: chartLayout.engine,
+            chartType:
+              typeof chartLayout.payload === "object" &&
+              chartLayout.payload !== null &&
+              !Array.isArray(chartLayout.payload) &&
+              typeof chartLayout.payload.chartType === "string"
+                ? chartLayout.payload.chartType
+                : "Candles",
+            theme:
+              typeof chartLayout.payload === "object" &&
+              chartLayout.payload !== null &&
+              !Array.isArray(chartLayout.payload) &&
+              chartLayout.payload.theme === "light"
+                ? "light"
+                : "dark",
+          }
+        : null,
+      leaderboard: leaderboardAccounts
+        .map((entry) => {
+          const realizedPnl = entry.balance.minus(entry.initialBalance);
+          const returnPct = entry.initialBalance.isZero()
+            ? new Decimal(0)
+            : realizedPnl.div(entry.initialBalance).mul(100);
+          return {
+            userId: entry.user.id,
+            displayName: entry.user.displayName,
+            returnPct: returnPct.toDecimalPlaces(4).toString(),
+            realizedPnl: realizedPnl.toString(),
+            challengeStatus: entry.challenges[0]?.status ?? null,
+          };
+        })
+        .sort((first, second) =>
+          new Decimal(second.returnPct).cmp(first.returnPct),
+        )
+        .slice(0, 20),
       serverTime: now.toISOString(),
     });
   } catch (error) {

@@ -3,18 +3,20 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 
 import {
-  calculateFee,
-  calculateInitialMargin,
   calculateNotional,
   calculatePnl,
   closePosition,
-  evaluateOrder,
   simulateExecutionPrice,
 } from "@/server/execution";
 import { assertExecutableTick, type MarketTick } from "@/server/market-data";
 import { evaluateChallenge, tradingDateAt } from "@/server/risk";
 import { prisma } from "@/server/db/client";
 import { ApiError } from "@/server/http/api-error";
+import {
+  calculateOrderPreview,
+  type OrderPreviewInput,
+} from "@/server/trading/preview";
+import { validateProtectiveTargets } from "@/server/trading/targets";
 
 export interface PlaceOrderCommand {
   userId: string;
@@ -38,6 +40,21 @@ export interface ClosePositionCommand {
   positionId: string;
   quantity: string;
   idempotencyKey: string;
+  requestId: string;
+}
+
+export interface PreviewOrderCommand extends OrderPreviewInput {
+  userId: string;
+  accountId: string;
+  instrumentId: string;
+}
+
+export interface UpdatePositionTargetsCommand {
+  userId: string;
+  accountId: string;
+  positionId: string;
+  stopLoss?: string | null;
+  takeProfit?: string | null;
   requestId: string;
 }
 
@@ -179,6 +196,65 @@ async function persistRisk(
   }
 }
 
+export async function previewOrder(
+  command: PreviewOrderCommand,
+  tick: MarketTick,
+  now = new Date(),
+) {
+  const account = await prisma.tradingAccount.findFirst({
+    where: { id: command.accountId, userId: command.userId },
+    include: {
+      challenges: {
+        where: { status: "ACTIVE" },
+        include: {
+          rules: true,
+          violations: { where: { resolvedAt: null, blocksTrading: true } },
+        },
+        take: 1,
+      },
+      positions: {
+        where: {
+          status: "OPEN",
+          instrumentId: command.instrumentId,
+          side: command.side,
+        },
+        select: { id: true },
+        take: 1,
+      },
+    },
+  });
+  if (!account || account.status !== "ACTIVE")
+    throw new ApiError(403, "ACCOUNT_LOCKED", "Trading account is not active.");
+  const challenge = account.challenges[0];
+  if (!challenge?.rules || challenge.violations.length > 0)
+    throw new ApiError(
+      403,
+      "RISK_BLOCKED",
+      "Challenge risk rules block new orders.",
+    );
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: command.instrumentId, isActive: true },
+  });
+  if (!instrument || instrument.symbol !== tick.symbol)
+    throw new ApiError(400, "INSTRUMENT_INVALID", "Instrument is unavailable.");
+  if (account.positions.length > 0)
+    throw new ApiError(
+      409,
+      "POSITION_EXISTS",
+      "Close the existing position before opening another in this direction.",
+    );
+  return calculateOrderPreview(
+    command,
+    tick,
+    {
+      balance: account.balance.toString(),
+      maxLeverage: challenge.rules.maxLeverage.toString(),
+      maxPositionNotional: challenge.rules.maxPositionNotional.toString(),
+    },
+    now,
+  );
+}
+
 export async function placeOrder(
   command: PlaceOrderCommand,
   tick: MarketTick,
@@ -231,6 +307,12 @@ export async function placeOrder(
         "INSTRUMENT_INVALID",
         "Instrument is unavailable.",
       );
+    if (account.positions.length > 0)
+      throw new ApiError(
+        409,
+        "POSITION_EXISTS",
+        "Close the existing position before opening another in this direction.",
+      );
     if (
       account.positions.some(
         (position) =>
@@ -244,63 +326,31 @@ export async function placeOrder(
         "Close the existing position before opening another in this direction.",
       );
     }
-    const executionPrice = simulateExecutionPrice({
-      side: command.side === "LONG" ? "BUY" : "SELL",
-      oraclePrice: tick.price,
-      spreadBps: "4",
-      slippageBps: command.type === "MARKET" ? "2" : "0",
-    });
-    const decision = evaluateOrder(
-      command.type === "MARKET"
-        ? { type: "MARKET" }
-        : command.type === "LIMIT"
-          ? {
-              type: "LIMIT",
-              side: command.side === "LONG" ? "BUY" : "SELL",
-              marketPrice: tick.price,
-              limitPrice: command.limitPrice ?? "0",
-            }
-          : {
-              type: "STOP_LIMIT",
-              side: command.side === "LONG" ? "BUY" : "SELL",
-              marketPrice: tick.price,
-              limitPrice: command.limitPrice ?? "0",
-              stopPrice: command.stopPrice ?? "0",
-            },
+    const preview = calculateOrderPreview(
+      {
+        type: command.type,
+        side: command.side,
+        size: command.quantity,
+        sizeUnit: "ASSET",
+        leverage: command.leverage,
+        limitPrice: command.limitPrice,
+        stopPrice: command.stopPrice,
+        stopLoss: command.stopLoss,
+        takeProfit: command.takeProfit,
+      },
+      tick,
+      {
+        balance: account.balance.toString(),
+        maxLeverage: challenge.rules.maxLeverage.toString(),
+        maxPositionNotional: challenge.rules.maxPositionNotional.toString(),
+      },
+      now,
     );
-    const notional = calculateNotional(command.quantity, executionPrice);
-    if (
-      new (await import("decimal.js")).default(command.leverage).gt(
-        challenge.rules.maxLeverage.toString(),
-      )
-    )
-      throw new ApiError(
-        422,
-        "LEVERAGE_LIMIT",
-        "Requested leverage exceeds the challenge limit.",
-      );
-    if (notional.gt(challenge.rules.maxPositionNotional.toString()))
-      throw new ApiError(
-        422,
-        "POSITION_LIMIT",
-        "Requested notional exceeds the challenge limit.",
-      );
-    const margin = calculateInitialMargin({
-      quantity: command.quantity,
-      price: executionPrice,
-      leverage: command.leverage,
-    });
-    const fee = calculateFee({
-      quantity: command.quantity,
-      price: executionPrice,
-      feeBps: command.type === "MARKET" ? "5" : "2",
-    });
-    if (margin.plus(fee).gt(account.balance.toString()))
-      throw new ApiError(
-        422,
-        "INSUFFICIENT_BALANCE",
-        "Available balance is insufficient.",
-      );
+    const quantity = preview.quantity;
+    const executionPrice = preview.expectedExecutionPrice;
+    const notional = preview.notional;
+    const fee = preview.fee;
+    const executable = preview.orderStatus === "FILLED";
     const order = await tx.order.create({
       data: {
         accountId: account.id,
@@ -308,29 +358,29 @@ export async function placeOrder(
         idempotencyKey: command.idempotencyKey,
         type: command.type,
         side: command.side,
-        status: decision.executable ? "FILLED" : "OPEN",
-        quantity: command.quantity,
-        filledQuantity: decision.executable ? command.quantity : "0",
-        notional: asText(notional),
+        status: executable ? "FILLED" : "OPEN",
+        quantity,
+        filledQuantity: executable ? quantity : "0",
+        notional,
         leverage: command.leverage,
         limitPrice: command.limitPrice,
         stopPrice: command.stopPrice,
         stopLoss: command.stopLoss,
         takeProfit: command.takeProfit,
-        averageFillPrice: decision.executable ? asText(executionPrice) : null,
-        totalFee: decision.executable ? asText(fee) : "0",
-        filledAt: decision.executable ? now : null,
+        averageFillPrice: executable ? executionPrice : null,
+        totalFee: executable ? fee : "0",
+        filledAt: executable ? now : null,
       },
     });
-    if (decision.executable) {
+    if (executable) {
       await tx.fill.create({
         data: {
           orderId: order.id,
           accountId: account.id,
           instrumentId: instrument.id,
-          quantity: command.quantity,
-          price: asText(executionPrice),
-          fee: asText(fee),
+          quantity,
+          price: executionPrice,
+          fee,
           liquidityRole: command.type === "MARKET" ? "TAKER" : "MAKER",
           executedAt: now,
         },
@@ -340,10 +390,11 @@ export async function placeOrder(
           accountId: account.id,
           instrumentId: instrument.id,
           side: command.side,
-          quantity: command.quantity,
-          entryPrice: asText(executionPrice),
-          markPrice: asText(executionPrice),
+          quantity,
+          entryPrice: executionPrice,
+          markPrice: executionPrice,
           leverage: command.leverage,
+          liquidationPrice: preview.liquidationPrice,
           stopLoss: command.stopLoss,
           takeProfit: command.takeProfit,
           openedAt: now,
@@ -356,9 +407,9 @@ export async function placeOrder(
           positionId: position.id,
           action: "OPEN",
           side: command.side,
-          quantity: command.quantity,
-          entryPrice: asText(executionPrice),
-          fees: asText(fee),
+          quantity,
+          entryPrice: executionPrice,
+          fees: fee,
           openedAt: now,
         },
       });
@@ -417,6 +468,65 @@ export async function cancelOrder(
         entityType: "Order",
         entityId: order.id,
         requestId,
+      },
+    });
+    return updated;
+  });
+}
+
+export async function updatePositionTargets(
+  command: UpdatePositionTargetsCommand,
+  tick: MarketTick,
+  now = new Date(),
+) {
+  assertExecutableTick(tick, now, STALE_AFTER_MS);
+  return prisma.$transaction(async (tx) => {
+    const position = await tx.position.findFirst({
+      where: {
+        id: command.positionId,
+        accountId: command.accountId,
+        status: "OPEN",
+        account: { userId: command.userId },
+      },
+      include: { instrument: true },
+    });
+    if (!position || position.instrument.symbol !== tick.symbol)
+      throw new ApiError(
+        404,
+        "POSITION_NOT_FOUND",
+        "Open position was not found.",
+      );
+    const stopLoss =
+      command.stopLoss === undefined
+        ? (position.stopLoss?.toString() ?? null)
+        : command.stopLoss;
+    const takeProfit =
+      command.takeProfit === undefined
+        ? (position.takeProfit?.toString() ?? null)
+        : command.takeProfit;
+    validateProtectiveTargets({
+      side: position.side,
+      referencePrice: tick.price.toString(),
+      stopLoss,
+      takeProfit,
+    });
+    const updated = await tx.position.update({
+      where: { id: position.id },
+      data: {
+        stopLoss,
+        takeProfit,
+        markPrice: tick.price.toString(),
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: command.userId,
+        accountId: command.accountId,
+        action: "POSITION_TARGETS_UPDATED",
+        entityType: "Position",
+        entityId: position.id,
+        requestId: command.requestId,
+        metadata: { stopLoss, takeProfit, source: tick.source },
       },
     });
     return updated;
