@@ -6,6 +6,10 @@ import { prisma } from "@/server/db/client";
 import { ApiError, errorResponse } from "@/server/http/api-error";
 import { assertSameOrigin } from "@/server/security/csrf";
 import { getRequestContext } from "@/server/security/request-context";
+import {
+  assertRateLimit,
+  preferenceMutationRateLimiter,
+} from "@/server/security/rate-limit";
 import { chartResolutions } from "@/shared/chart";
 
 export const runtime = "nodejs";
@@ -30,6 +34,7 @@ export async function PUT(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const session = await requireSession(request);
+    assertRateLimit(preferenceMutationRateLimiter, session.user.id);
     const parsed = preferenceSchema.safeParse(await request.json());
     if (!parsed.success)
       throw new ApiError(400, "INVALID_PREFERENCE", "Invalid preference data.");

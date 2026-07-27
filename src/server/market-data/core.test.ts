@@ -68,4 +68,10 @@ describe("market-data normalization", () => {
     expect(first.fundingRate).toBeNull();
     expect(first.openInterest).toBeNull();
   });
+
+  it("rejects unsupported demo symbols instead of silently using BTC prices", () => {
+    expect(() => demoTick("SOL/USD", 1, new Date())).toThrow(
+      "Unsupported demo symbol",
+    );
+  });
 });

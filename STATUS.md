@@ -16,8 +16,8 @@
 |  10 | Order ticket и подтверждение               | готов     | 2026-07-26: 8 order/route tests, browser 1440/390, `pnpm check/build`           | USD/asset, quick %, SL/TP, authoritative preview, fee/margin/liquidation/P&L/RR и stable idempotency key |
 |  11 | Панели challenge, позиций, ордеров и риска | готов     | 2026-07-26: 5 targets/route + UI tests, browser 1440/390, `pnpm check/build`    | Live PnL, SL/TP edit, partial/full close, cancel, history и объяснения risk limits                       |
 |  12 | Остальные продуктовые разделы              | готов     | 2026-07-26: 4 workspace/persistence tests, browser 1440/390, `pnpm check/build` | Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics, Settings и ChartLayout persistence       |
-|  13 | Сквозной Playwright-сценарий               | не начат  | —                                                                               | —                                                                                                        |
-|  14 | Production hardening и финальная приёмка   | не начат  | —                                                                               | —                                                                                                        |
+|  13 | Сквозной Playwright-сценарий               | готов     | 2026-07-27: Playwright ×2, `pnpm check`, `pnpm build`                           | Изолированная PostgreSQL 17, demo-feed и детерминированный восьмишаговый пользовательский путь           |
+|  14 | Production hardening и финальная приёмка   | готов     | 2026-07-27: `pnpm check`, DB integration ×3, Playwright ×2, build, prod headers | Rate limits, concurrent serialization, stale/reconnect, responsive/keyboard, clean-deploy docs           |
 
 ## Правило обновления
 

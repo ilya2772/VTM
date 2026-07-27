@@ -4,6 +4,10 @@ import { requireSession } from "@/server/auth/session";
 import { ApiError, errorResponse } from "@/server/http/api-error";
 import { assertSameOrigin } from "@/server/security/csrf";
 import { getRequestContext } from "@/server/security/request-context";
+import {
+  assertRateLimit,
+  tradingMutationRateLimiter,
+} from "@/server/security/rate-limit";
 import { getAuthoritativeTick } from "@/server/trading/price";
 import { cancelOrderSchema, placeOrderSchema } from "@/server/trading/schema";
 import {
@@ -19,6 +23,7 @@ export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const session = await requireSession(request);
+    assertRateLimit(tradingMutationRateLimiter, session.user.id);
     const parsed = placeOrderSchema.safeParse(await request.json());
     if (!parsed.success)
       throw new ApiError(400, "VALIDATION_ERROR", "Order input is invalid.");
@@ -61,6 +66,7 @@ export async function DELETE(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const session = await requireSession(request);
+    assertRateLimit(tradingMutationRateLimiter, session.user.id);
     const parsed = cancelOrderSchema.safeParse(await request.json());
     if (!parsed.success)
       throw new ApiError(400, "VALIDATION_ERROR", "Cancel input is invalid.");

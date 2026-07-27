@@ -1,5 +1,7 @@
 import "server-only";
 
+import { ApiError } from "@/server/http/api-error";
+
 type RateLimitEntry = {
   count: number;
   resetAt: number;
@@ -28,6 +30,10 @@ export class FixedWindowRateLimiter {
     this.prune(now);
 
     const current = this.entries.get(key);
+    if (!current && this.entries.size >= this.maxEntries) {
+      const oldestKey = this.entries.keys().next().value as string | undefined;
+      if (oldestKey) this.entries.delete(oldestKey);
+    }
     const entry =
       current && current.resetAt > now
         ? current
@@ -53,23 +59,58 @@ export class FixedWindowRateLimiter {
         this.entries.delete(key);
       }
     }
-
-    while (this.entries.size >= this.maxEntries) {
-      const oldestKey = this.entries.keys().next().value as string | undefined;
-      if (!oldestKey) break;
-      this.entries.delete(oldestKey);
-    }
   }
 }
 
 const globalForRateLimit = globalThis as unknown as {
-  loginRateLimiter?: FixedWindowRateLimiter;
+  loginEmailRateLimiter?: FixedWindowRateLimiter;
+  loginIpRateLimiter?: FixedWindowRateLimiter;
+  tradingMutationRateLimiter?: FixedWindowRateLimiter;
+  orderPreviewRateLimiter?: FixedWindowRateLimiter;
+  preferenceMutationRateLimiter?: FixedWindowRateLimiter;
 };
 
-export const loginRateLimiter =
-  globalForRateLimit.loginRateLimiter ??
+export const loginEmailRateLimiter =
+  globalForRateLimit.loginEmailRateLimiter ??
   new FixedWindowRateLimiter(5, 15 * 60_000);
+export const loginIpRateLimiter =
+  globalForRateLimit.loginIpRateLimiter ??
+  new FixedWindowRateLimiter(20, 15 * 60_000);
+export const tradingMutationRateLimiter =
+  globalForRateLimit.tradingMutationRateLimiter ??
+  new FixedWindowRateLimiter(60, 60_000);
+export const orderPreviewRateLimiter =
+  globalForRateLimit.orderPreviewRateLimiter ??
+  new FixedWindowRateLimiter(240, 60_000);
+export const preferenceMutationRateLimiter =
+  globalForRateLimit.preferenceMutationRateLimiter ??
+  new FixedWindowRateLimiter(60, 60_000);
+
+export function assertRateLimit(
+  limiter: FixedWindowRateLimiter,
+  key: string,
+  now = Date.now(),
+): RateLimitResult {
+  const result = limiter.consume(key, now);
+  if (!result.allowed) {
+    throw new ApiError(
+      429,
+      "RATE_LIMITED",
+      "Too many requests. Try again later.",
+      {
+        "Retry-After": String(result.retryAfterSeconds),
+        "X-RateLimit-Remaining": String(result.remaining),
+      },
+    );
+  }
+  return result;
+}
 
 if (process.env.NODE_ENV !== "production") {
-  globalForRateLimit.loginRateLimiter = loginRateLimiter;
+  globalForRateLimit.loginEmailRateLimiter = loginEmailRateLimiter;
+  globalForRateLimit.loginIpRateLimiter = loginIpRateLimiter;
+  globalForRateLimit.tradingMutationRateLimiter = tradingMutationRateLimiter;
+  globalForRateLimit.orderPreviewRateLimiter = orderPreviewRateLimiter;
+  globalForRateLimit.preferenceMutationRateLimiter =
+    preferenceMutationRateLimiter;
 }

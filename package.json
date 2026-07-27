@@ -21,6 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:integration": "RUN_DB_TESTS=1 vitest run src/server/trading/service.integration.test.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"

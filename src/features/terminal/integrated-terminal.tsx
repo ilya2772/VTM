@@ -292,6 +292,7 @@ export function IntegratedTerminal() {
   );
   useEffect(() => {
     if (!instrument) return;
+    let lastTickReceivedAt = 0;
     const events = new EventSource(
       `/api/market/stream?symbol=${encodeURIComponent(instrument.symbol)}`,
     );
@@ -301,6 +302,7 @@ export function IntegratedTerminal() {
           (event as MessageEvent<string>).data,
         );
         if (isStreamTick(parsed)) {
+          lastTickReceivedAt = Date.now();
           setTick(parsed);
           setConnection(parsed.connection);
         }
@@ -309,7 +311,14 @@ export function IntegratedTerminal() {
       }
     });
     events.onerror = () => setConnection("RECONNECTING");
-    return () => events.close();
+    const staleTimer = window.setInterval(() => {
+      if (lastTickReceivedAt && Date.now() - lastTickReceivedAt > 5_000)
+        setConnection("STALE");
+    }, 1_000);
+    return () => {
+      window.clearInterval(staleTimer);
+      events.close();
+    };
   }, [instrument]);
 
   const orderFieldsValid =
@@ -324,7 +333,7 @@ export function IntegratedTerminal() {
     state?.account.status === "ACTIVE" &&
     state.challenge?.status === "ACTIVE" &&
     !state.challenge.violations.some((violation) => violation.blocksTrading) &&
-    connection === "DEMO" &&
+    (connection === "DEMO" || connection === "LIVE") &&
     orderFieldsValid;
   useEffect(() => {
     const controller = new AbortController();
@@ -444,7 +453,7 @@ export function IntegratedTerminal() {
   const canTrade =
     state.account.status === "ACTIVE" &&
     state.challenge?.status === "ACTIVE" &&
-    connection === "DEMO" &&
+    (connection === "DEMO" || connection === "LIVE") &&
     new Decimal(mark).gt(0);
   const positions = state.positions;
   const selectedPositions = positions.filter(

@@ -64,6 +64,13 @@ function asText(value: { toString(): string }): string {
   return value.toString();
 }
 
+async function lockTradingAccount(
+  tx: Prisma.TransactionClient,
+  accountId: string,
+): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`axiom-account:${accountId}`}, 0)) IS NULL AS locked`;
+}
+
 async function persistRisk(
   tx: Prisma.TransactionClient,
   accountId: string,
@@ -262,6 +269,7 @@ export async function placeOrder(
 ) {
   assertExecutableTick(tick, now, STALE_AFTER_MS);
   return prisma.$transaction(async (tx) => {
+    await lockTradingAccount(tx, command.accountId);
     const replay = await tx.order.findUnique({
       where: {
         accountId_idempotencyKey: {
@@ -447,6 +455,7 @@ export async function cancelOrder(
   requestId: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    await lockTradingAccount(tx, accountId);
     const order = await tx.order.findFirst({
       where: { id: orderId, accountId, account: { userId } },
     });
@@ -481,6 +490,7 @@ export async function updatePositionTargets(
 ) {
   assertExecutableTick(tick, now, STALE_AFTER_MS);
   return prisma.$transaction(async (tx) => {
+    await lockTradingAccount(tx, command.accountId);
     const position = await tx.position.findFirst({
       where: {
         id: command.positionId,
@@ -540,6 +550,7 @@ export async function closeTradingPosition(
 ) {
   assertExecutableTick(tick, now, STALE_AFTER_MS);
   return prisma.$transaction(async (tx) => {
+    await lockTradingAccount(tx, command.accountId);
     const replay = await tx.order.findUnique({
       where: {
         accountId_idempotencyKey: {

@@ -147,6 +147,8 @@ export function demoTick(
   publishedAt: Date,
 ): MarketTick {
   assertInteger(sequence, "sequence");
+  if (symbol !== "BTC/USD" && symbol !== "ETH/USD")
+    throw new Error("Unsupported demo symbol");
   const base =
     symbol === "ETH/USD" ? new Decimal("3500") : new Decimal("67500");
   const increment =

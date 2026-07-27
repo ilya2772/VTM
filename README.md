@@ -2,14 +2,14 @@
 
 A production-oriented virtual prop-trading terminal. The project simulates trading only: it does not use real money, submit exchange orders or perform blockchain transactions.
 
-The repository contains the verified engineering, database, authentication, market-data, execution, risk and responsive terminal foundations tracked in `STATUS.md`. Remaining product capabilities are added according to `IMPLEMENTATION_PLAN.md`.
+The repository contains the staged implementation tracked in `STATUS.md`. The final acceptance commands and known external limitations are documented below.
 
 ## Requirements
 
 - Node.js 20.9 or newer
 - pnpm 11
 
-PostgreSQL is required from stage 2 onward. Pyth Pro credentials and licensed TradingView Advanced Charts files are not required for the foundation.
+PostgreSQL is required. Pyth Pro credentials and licensed TradingView Advanced Charts files are optional for the deterministic local demo path.
 
 ## Database setup
 
@@ -48,6 +48,25 @@ Open `http://localhost:3000`.
 
 The checked-in environment example defaults to clearly identified demo market data and the open-source Lightweight Charts adapter. Replace placeholder database credentials locally; never commit real credentials.
 
+## Clean deployment
+
+From a clean checkout with an empty PostgreSQL database:
+
+```bash
+pnpm install --frozen-lockfile
+cp .env.example .env.local
+# Set a dedicated DATABASE_URL in .env.local.
+pnpm db:validate
+pnpm db:generate
+pnpm db:deploy
+pnpm db:seed
+pnpm check
+pnpm build
+pnpm start
+```
+
+The database role referenced by `DATABASE_URL` must already exist and own, or have create privileges on, the target database. Use `pnpm db:deploy`, not `db:migrate`, in a deployed environment. Run the application behind HTTPS and a trusted reverse proxy, set `NODE_ENV=production`, keep `.env.local` outside source control, and replace the public demo login before exposing an instance beyond a controlled simulation environment.
+
 ## Commands
 
 ```bash
@@ -59,10 +78,13 @@ pnpm typecheck     # strict TypeScript check
 pnpm format        # format supported files
 pnpm format:check  # verify formatting
 pnpm test          # Vitest unit tests
+pnpm test:integration # PostgreSQL transactional/concurrency tests
 pnpm test:watch    # Vitest watch mode
-pnpm test:e2e      # Playwright tests (added with product flows)
+pnpm test:e2e      # isolated PostgreSQL + deterministic Playwright journey
 pnpm check         # formatting, lint, types and unit tests
 ```
+
+`pnpm test:integration` uses `DATABASE_URL` from the current environment and must target a disposable seeded test database. `pnpm test:e2e` creates and removes an isolated local PostgreSQL 17 cluster; it requires the PostgreSQL server binaries (`initdb`, `pg_ctl`, and `createdb`) to be installed. The E2E scenario blocks the external TradingView script and never depends on live market data.
 
 ## Module boundaries
 
@@ -116,6 +138,8 @@ Daily and overall loss limits breach inclusively at the configured percentage. E
 
 `MARKET_DATA_MODE=demo` exposes a deterministic SSE feed at `/api/market/stream` and labels every event `DEMO`. The browser contract distinguishes `LIVE`, `DEMO`, `RECONNECTING`, `STALE`, and `ERROR`; unsupported volume, funding, and open-interest fields are returned as `null` and rendered as `N/A`. Pyth integer price and confidence values are normalized with their exponent on the server. The API key is read only by the server adapter and never included in URLs, responses, or logs. A tick is executable through the configured stale threshold, then new execution is rejected. Reconnect clients use capped exponential backoff, and OHLC aggregation de-duplicates identical ticks before building timestamp buckets.
 
+To request a Pyth Pro key, follow the [official Pyth key guide](https://docs.pyth.network/price-feeds/pro/acquire-api-key) and consult the [official API reference](https://docs.pyth.network/price-feeds/pro/api). Store the key only as `PYTH_PRO_API_KEY` on the server. The checked-in Pyth adapter currently normalizes authenticated history payloads, but the application route deliberately returns `503` when `MARKET_DATA_MODE=pyth`: the production WebSocket subscription and feed mapping are not enabled without a deployment-specific Pyth Pro integration. It never silently falls back to demo prices.
+
 ## Transactional trading API
 
 Authenticated, same-origin requests create or cancel orders through `/api/trading/orders` and close positions through `/api/trading/positions/close`. The client supplies intent and an idempotency key, but never supplies an authoritative market price, balance, PnL, fee, or risk result. The server obtains a fresh tick, repeats all limits and Decimal calculations, and writes orders, fills, trades, positions, equity/risk snapshots, violations, account state, and audit records inside one Prisma transaction. Reusing an account/idempotency-key pair returns the original order. A rejected command rolls back without partial records, and a close that would produce a negative balance is rejected.
@@ -127,6 +151,8 @@ The terminal UI adapts the project-root `index.html` concept into the Next.js ap
 The default visual chart is TradingView's official public Advanced Chart embed using TradingView's Pyth symbols (`PYTH:BTCUSD` and `PYTH:ETHUSD`). It restores TradingView drawing tools and indicators while showing the live and historical Pyth Price Feeds distributed by TradingView. Simulated execution remains independent and server-authoritative through Axiom's Pyth/demo gateway; browser chart values are never accepted for execution.
 
 No licensed self-hosted TradingView Advanced Charts assets are included or imitated. The custom `ChartProvider` and Lightweight Charts implementation remains available in the codebase for a direct Axiom datafeed, but it is not the default visual chart while the official TradingView embed supplies the requested tools.
+
+For a self-hosted Advanced Charts deployment, request access through the [official Advanced Charts page](https://www.tradingview.com/advanced-charts/) and follow TradingView's [official installation guide](https://www.tradingview.com/charting-library-docs/latest/getting_started/quick-start/). TradingView distributes the library through a restricted repository and prohibits redistribution; never commit those assets here. Until approved files are supplied, this repository uses the public TradingView embed for the visible chart and retains the Lightweight Charts adapter as the unlicensed fallback.
 
 The order ticket supports Market, Limit and Stop Limit for Long and Short, sizing in USD or asset units, leverage, quick percentages, Stop Loss and Take Profit. Before confirmation, the authenticated `/api/trading/orders/preview` endpoint converts size using the authoritative server price and validates account, challenge, stale-price and risk limits. The confirmation displays expected execution, fee, margin, liquidation, potential P/L and risk/reward. Submission reuses a stable idempotency key and repeats the same server calculations before creating any simulated order.
 
@@ -142,6 +168,15 @@ Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are 
 - `.env*` files are ignored except for the safe `.env.example` template.
 - Licensed TradingView Advanced Charts assets are obtained only through official access and are excluded from source control.
 
+## Production security controls
+
+- State-changing routes enforce same-origin checks, authenticated ownership, strict Zod input validation, and per-user fixed-window request limits. Order previews have a separate higher limit for interactive form updates.
+- Login is limited independently by normalized email and client address. API errors are non-cacheable, carry a request ID, and do not return internal exception details.
+- Trading mutations acquire a PostgreSQL transaction-scoped advisory lock per account. Concurrent retries with the same idempotency key serialize to one order, and competing account mutations cannot update the same balance or position concurrently.
+- Production responses enable HSTS and all responses set clickjacking, MIME-sniffing, referrer, opener, and browser-permission headers.
+- The bundled limiter is process-local. Multi-instance or horizontally scaled deployment requires a shared Redis/database-backed limiter at the application or trusted edge layer.
+- `X-Forwarded-For` must be overwritten by a trusted reverse proxy; do not expose the Node.js process directly while using forwarded addresses for abuse controls.
+
 ## Environment variables
 
 | Name               | Exposure             | Purpose                                          |
@@ -151,6 +186,14 @@ Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are 
 | `PYTH_CHANNEL`     | server-only          | Pyth streaming channel                           |
 | `MARKET_DATA_MODE` | server configuration | `pyth` or visibly labelled `demo` mode           |
 | `CHART_ENGINE`     | server configuration | `tradingview` or `lightweight` adapter selection |
+
+## Known limitations
+
+- This is simulation software only. It cannot submit exchange orders, move funds, or perform blockchain transactions.
+- Live Pyth WebSocket routing is deployment work that requires Pyth Pro credentials and feed configuration; `pyth` mode fails closed with `503` in this repository.
+- The visible TradingView chart depends on TradingView's public network embed. Licensed self-hosted Advanced Charts assets are absent by design and must come from TradingView's restricted official repository.
+- Rate limits are safe for one application process only. Horizontal scaling requires a shared limiter.
+- The deterministic E2E harness depends on locally installed PostgreSQL 17 command-line server tools and currently runs Chromium only.
 
 ## Planning documents
 

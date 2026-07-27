@@ -141,4 +141,56 @@ run("transactional execution integration", () => {
       await prisma.order.count({ where: { accountId, idempotencyKey: key } }),
     ).toBe(0);
   });
+
+  it("serializes concurrent retries into one order and one position", async () => {
+    const tick = demoTick("BTC/USD", 10, now);
+    const key = `concurrent-${suffix}`;
+    const command = {
+      userId,
+      accountId,
+      instrumentId,
+      idempotencyKey: key,
+      type: "MARKET" as const,
+      side: "SHORT" as const,
+      quantity: "0.05",
+      leverage: "3",
+      requestId: "integration-concurrent",
+    };
+
+    const results = await Promise.all([
+      placeOrder(command, tick, now),
+      placeOrder(command, tick, now),
+    ]);
+
+    expect(results.map(({ replayed }) => replayed).sort()).toEqual([
+      false,
+      true,
+    ]);
+    expect(
+      await prisma.order.count({
+        where: { accountId, idempotencyKey: key },
+      }),
+    ).toBe(1);
+    const position = await prisma.position.findFirstOrThrow({
+      where: { accountId, status: "OPEN" },
+    });
+    expect(
+      await prisma.position.count({
+        where: { accountId, status: "OPEN" },
+      }),
+    ).toBe(1);
+
+    await closeTradingPosition(
+      {
+        userId,
+        accountId,
+        positionId: position.id,
+        quantity: position.quantity.toString(),
+        idempotencyKey: `concurrent-cleanup-${suffix}`,
+        requestId: "integration-concurrent",
+      },
+      tick,
+      now,
+    );
+  });
 });

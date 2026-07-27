@@ -16,6 +16,9 @@ export class ApiError extends Error {
 
 export function errorResponse(error: unknown, requestId: string) {
   if (error instanceof ApiError) {
+    const headers = new Headers(error.headers);
+    headers.set("Cache-Control", "no-store");
+    headers.set("X-Request-Id", requestId);
     return NextResponse.json(
       {
         error: {
@@ -24,7 +27,7 @@ export function errorResponse(error: unknown, requestId: string) {
           requestId,
         },
       },
-      { status: error.status, headers: error.headers },
+      { status: error.status, headers },
     );
   }
 
@@ -41,6 +44,9 @@ export function errorResponse(error: unknown, requestId: string) {
         requestId,
       },
     },
-    { status: 500 },
+    {
+      status: 500,
+      headers: { "Cache-Control": "no-store", "X-Request-Id": requestId },
+    },
   );
 }
