@@ -1,0 +1,682 @@
+.fusion-app {
+  --f-bg: #070808;
+  --f-panel: #0b0d0e;
+  --f-panel-2: #0e1011;
+  --f-panel-3: #131617;
+  --f-line: #2b2e2f;
+  --f-line-soft: #1c1f20;
+  --f-text: #f1f1f1;
+  --f-muted: #919596;
+  --f-green: #39bf68;
+  --f-red: #f04f4f;
+  --f-purple: #a868dc;
+  --f-amber: #ffad0a;
+  height: 100dvh;
+  min-height: 720px;
+  overflow: hidden;
+  grid-template-rows: 66px minmax(0, 1fr) 26px;
+  background: #070808;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 12px;
+}
+
+.fusion-app button:focus-visible,
+.fusion-app input:focus-visible,
+.fusion-app select:focus-visible {
+  outline-color: var(--f-amber);
+}
+
+.fusion-topbar {
+  gap: 18px;
+  padding: 0 18px;
+  border: 1px solid var(--f-line);
+  border-bottom-color: #36393a;
+  background: linear-gradient(180deg, #0e1011, #090a0b);
+}
+
+.fusion-brand {
+  min-width: 145px;
+}
+
+.fusion-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--f-amber);
+  color: #151000;
+  box-shadow: 0 0 20px #ffad0a17;
+}
+
+.fusion-brand strong {
+  font-size: 13px;
+}
+
+.fusion-brand small {
+  color: #7e8283;
+}
+
+.fusion-pair {
+  padding: 0 16px 0 0;
+  border: 0;
+  border-right: 1px solid var(--f-line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 15px;
+}
+
+.fusion-live-price {
+  display: grid;
+  min-width: 112px;
+  color: var(--f-red);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+.fusion-demo-badge {
+  padding: 4px 7px;
+  border: 1px solid #70531a;
+  border-radius: 4px;
+  background: #201808;
+  color: var(--f-amber);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.fusion-top-meta,
+.fusion-account-meta {
+  gap: clamp(14px, 2.5vw, 38px);
+}
+
+.fusion-top-meta span,
+.fusion-account-meta span {
+  gap: 5px;
+  color: #8c8f90;
+  font-size: 9px;
+}
+
+.fusion-top-meta strong,
+.fusion-account-meta strong {
+  color: #e7e7e7;
+  font-size: 10px;
+}
+
+.fusion-profile > span {
+  background: #202324;
+}
+
+.fusion-terminal {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 238px minmax(600px, 1fr) 254px;
+  grid-template-rows: minmax(440px, 1fr) 96px 170px;
+  gap: 0;
+  border-inline: 1px solid var(--f-line);
+  background: var(--f-bg);
+}
+
+.fusion-terminal > * {
+  background: var(--f-panel);
+}
+
+.fusion-rail {
+  display: none;
+}
+
+.fusion-leftbar {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  border-right: 1px solid var(--f-line);
+  background: #0a0c0d;
+  scrollbar-color: #343738 transparent;
+}
+
+.fusion-leftbar section {
+  padding: 13px 14px;
+  border-bottom-color: var(--f-line);
+}
+
+.fusion-section-title {
+  margin-bottom: 10px;
+}
+
+.fusion-section-title h2 {
+  color: #e4e4e4;
+  font-size: 9px;
+  font-weight: 720;
+}
+
+.fusion-section-title > span {
+  padding: 3px 7px;
+  background: #352444;
+  color: #d7b8ed;
+}
+
+.fusion-target {
+  margin: 0 0 8px;
+}
+
+.fusion-target strong,
+.fusion-risk-number {
+  color: var(--f-green);
+  font-size: 18px;
+}
+
+.fusion-bar {
+  height: 5px;
+  background: #303334;
+}
+
+.fusion-bar > span,
+.fusion-drawdown span {
+  background: linear-gradient(90deg, #30a955, #45d278);
+}
+
+.fusion-rule-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--f-muted);
+  font-size: 9px;
+}
+
+.fusion-rule-row strong {
+  color: #c9cbcb;
+  font-weight: 560;
+}
+
+.fusion-stats {
+  gap: 7px;
+}
+
+.fusion-watchlist button {
+  padding: 7px 8px;
+  border-radius: 3px;
+}
+
+.fusion-watchlist button[aria-pressed="true"] {
+  border-color: #654a19;
+  background: #16130d;
+  box-shadow: inset 2px 0 var(--f-amber);
+}
+
+.fusion-watchlist em {
+  color: var(--f-amber);
+}
+
+.fusion-workspace,
+.fusion-rightbar {
+  display: contents;
+}
+
+.fusion-chart-zone {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  border-right: 1px solid var(--f-line);
+  border-bottom: 1px solid var(--f-line);
+  background: #090b0c;
+}
+
+.fusion-chart-head {
+  position: absolute;
+  z-index: 5;
+  top: 7px;
+  right: 8px;
+  height: 31px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.fusion-fullscreen {
+  height: 31px;
+  padding: 6px 8px;
+  border: 1px solid var(--f-line);
+  border-radius: 3px;
+  background: #0c0e0fe6;
+}
+
+.tv-frame {
+  background: #090b0c;
+}
+
+.chart-disclosure {
+  border-color: #353839;
+  background: #0b0d0eed;
+  color: #85898a;
+}
+
+.fusion-order-desk {
+  grid-column: 3;
+  grid-row: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 13px 11px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--f-line);
+  background: linear-gradient(180deg, #0c0e0f, #090b0c);
+}
+
+.fusion-order-desk::before {
+  display: block;
+  margin-bottom: 11px;
+  color: #f0f0f0;
+  content: "Trade";
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fusion-order-tabs {
+  height: 34px;
+  gap: 22px;
+  border-bottom: 1px solid var(--f-line-soft);
+}
+
+.fusion-order-tabs button {
+  padding-inline: 4px;
+  color: #a1a3a4;
+  font-size: 10px;
+}
+
+.fusion-order-tabs button[aria-selected="true"] {
+  color: var(--f-amber);
+  border-color: var(--f-amber);
+}
+
+.fusion-order-fields {
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 11px;
+}
+
+.fusion-order-fields label {
+  gap: 6px;
+  font-size: 9px;
+}
+
+.fusion-order-fields input,
+.fusion-order-fields select {
+  height: 39px;
+  padding: 0 10px;
+  border-color: #343738;
+  border-radius: 4px;
+  background: #0b0d0e;
+}
+
+.fusion-percent-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  margin: 11px 0;
+}
+
+.fusion-percent-row button {
+  padding: 6px 2px;
+  border-color: #303334;
+  border-radius: 3px;
+  background: #111415;
+}
+
+.fusion-percent-row button:hover {
+  border-color: var(--f-amber);
+  color: var(--f-amber);
+}
+
+.fusion-order-grid {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.fusion-order-card,
+.fusion-score-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.fusion-order-card > div:first-child {
+  display: none;
+}
+
+.fusion-order-card dl {
+  display: none;
+}
+
+.fusion-order-card > button {
+  display: grid;
+  place-content: center;
+  gap: 3px;
+  min-height: 47px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.fusion-order-card > button small {
+  font-size: 8px;
+  font-weight: 500;
+  opacity: 0.86;
+}
+
+.fusion-order-card.long > button {
+  background: linear-gradient(135deg, #2f9f52, #45c86f);
+}
+
+.fusion-order-card.short > button {
+  background: linear-gradient(135deg, #cf4141, #ef5858);
+}
+
+.fusion-order-summary {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 9px;
+  border: 1px solid var(--f-line);
+  border-radius: 4px;
+  background: #0d0f10;
+}
+
+.fusion-order-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fusion-order-summary dt {
+  color: var(--f-muted);
+}
+
+.fusion-order-summary dd {
+  margin: 0;
+  color: #e8e8e8;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.fusion-message {
+  margin-top: 8px;
+  color: #9a9d9e;
+}
+
+.fusion-rightbar > .fusion-activity {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 12px;
+  border-right: 1px solid var(--f-line);
+  background: #0a0c0d;
+}
+
+.fusion-position-tabs {
+  height: 43px;
+  align-items: flex-end;
+  gap: 26px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--f-line-soft);
+}
+
+.fusion-position-tabs button {
+  padding-bottom: 11px;
+  font-size: 9px;
+}
+
+.fusion-position-tabs button[aria-selected="true"] {
+  color: var(--f-amber);
+  border-color: var(--f-amber);
+}
+
+.fusion-empty {
+  min-height: 190px;
+  color: #898c8d;
+}
+
+.fusion-position,
+.fusion-list-row {
+  max-width: 100%;
+}
+
+.fusion-rightbar > .fusion-right-card:nth-child(2) {
+  display: none;
+}
+
+.fusion-coach {
+  grid-column: 3;
+  grid-row: 2 / 4;
+  min-height: 0;
+  padding: 14px;
+  border-bottom: 0;
+  background: #0b0d0e;
+}
+
+.fusion-coach-score {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 8px;
+  padding: 10px;
+  border: 1px solid var(--f-line);
+  border-radius: 4px;
+  background: #0e1112;
+}
+
+.fusion-coach-score > span {
+  color: var(--f-muted);
+}
+
+.fusion-coach-score > strong {
+  grid-column: 1;
+  color: var(--f-green);
+  font-size: 22px;
+}
+
+.fusion-coach-score > strong small {
+  color: var(--f-muted);
+  font-size: 10px;
+}
+
+.fusion-coach-score .fusion-sparkline {
+  grid-column: 1 / 3;
+  height: 36px;
+}
+
+.fusion-coach-metrics {
+  display: grid;
+  gap: 9px;
+  margin: 13px 0;
+}
+
+.fusion-coach-metrics div {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--f-line-soft);
+}
+
+.fusion-coach-metrics dt {
+  color: var(--f-muted);
+}
+
+.fusion-coach-metrics dd {
+  margin: 0;
+  color: #ededed;
+}
+
+.fusion-coach-note {
+  margin: 0;
+  color: #aeb2b3;
+  line-height: 1.55;
+}
+
+.fusion-footer {
+  border: 1px solid var(--f-line);
+  background: #090a0b;
+}
+
+@media (max-width: 1450px) {
+  .fusion-terminal {
+    grid-template-columns: 218px minmax(560px, 1fr) 250px;
+  }
+
+  .fusion-top-meta span:nth-child(4),
+  .fusion-account-meta span:nth-child(1) {
+    display: none;
+  }
+}
+
+@media (max-width: 1250px) {
+  .fusion-terminal {
+    grid-template-columns: minmax(560px, 1fr) 250px;
+  }
+
+  .fusion-leftbar {
+    display: none;
+  }
+
+  .fusion-chart-zone,
+  .fusion-rightbar > .fusion-activity {
+    grid-column: 1;
+  }
+
+  .fusion-order-desk,
+  .fusion-rightbar > .fusion-right-card:nth-child(2),
+  .fusion-coach {
+    grid-column: 2;
+  }
+
+  .fusion-top-meta {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .fusion-app {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    grid-template-rows: 56px auto 28px;
+  }
+
+  .fusion-topbar {
+    position: sticky;
+    z-index: 10;
+    top: 0;
+  }
+
+  .fusion-terminal {
+    display: flex;
+    flex-direction: column;
+    border: 0;
+  }
+
+  .fusion-workspace,
+  .fusion-rightbar {
+    display: contents;
+  }
+
+  .fusion-chart-zone {
+    order: 1;
+    min-height: 500px;
+    grid-template-rows: 500px;
+    border-right: 0;
+  }
+
+  .fusion-order-desk {
+    order: 2;
+    overflow: visible;
+    border-bottom: 1px solid var(--f-line);
+  }
+
+  .fusion-order-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fusion-order-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fusion-rightbar > .fusion-activity {
+    order: 3;
+    min-height: 300px;
+    border-right: 0;
+  }
+
+  .fusion-rightbar > .fusion-right-card:nth-child(2) {
+    order: 4;
+  }
+
+  .fusion-coach {
+    order: 5;
+    min-height: 160px;
+  }
+
+  .fusion-leftbar {
+    order: 6;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+    border-right: 0;
+    border-top: 1px solid var(--f-line);
+  }
+
+  .fusion-leftbar section {
+    border-right: 1px solid var(--f-line);
+  }
+
+  .fusion-account-meta,
+  .fusion-profile div {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .fusion-brand {
+    min-width: 34px;
+  }
+
+  .fusion-brand > span:last-child,
+  .fusion-demo-badge {
+    display: none;
+  }
+
+  .fusion-pair {
+    padding-right: 8px;
+    font-size: 11px;
+  }
+
+  .fusion-live-price {
+    min-width: 0;
+    font-size: 10px;
+  }
+
+  .fusion-chart-zone {
+    min-height: 450px;
+    grid-template-rows: 450px;
+  }
+
+  .fusion-order-fields,
+  .fusion-order-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fusion-leftbar {
+    grid-template-columns: 1fr;
+  }
+
+  .fusion-position-tabs {
+    gap: 15px;
+  }
+
+  .fusion-footer span:last-child {
+    display: none;
+  }
+}

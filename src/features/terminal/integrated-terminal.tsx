@@ -13,20 +13,6 @@ import {
 import { TradingViewWidget } from "./components/tradingview-widget";
 import type { StreamTick, TerminalState } from "./types";
 
-const timeframes = [
-  "1m",
-  "5m",
-  "15m",
-  "30m",
-  "1h",
-  "2h",
-  "4h",
-  "6h",
-  "12h",
-  "1D",
-  "1W",
-  "1M",
-] as const;
 type OrderKind = "MARKET" | "LIMIT" | "STOP_LIMIT";
 type Side = "LONG" | "SHORT";
 type Activity = "POSITIONS" | "ORDERS" | "HISTORY" | "RISK";
@@ -39,6 +25,14 @@ function money(value: string, signed = false) {
 
 function percent(value: string) {
   return `${new Decimal(value).toFixed(2)}%`;
+}
+
+function decimalOrZero(value: string) {
+  try {
+    return new Decimal(value || 0);
+  } catch {
+    return new Decimal(0);
+  }
 }
 
 function isStreamTick(value: unknown): value is StreamTick {
@@ -129,9 +123,7 @@ export function IntegratedTerminal() {
     symbol: string;
     value: StreamTick["connection"];
   }>({ symbol: "", value: "RECONNECTING" });
-  const [timeframe, setTimeframe] =
-    useState<(typeof timeframes)[number]>("15m");
-  const [orderKind, setOrderKind] = useState<OrderKind>("MARKET");
+  const [orderKind, setOrderKind] = useState<OrderKind>("LIMIT");
   const [amount, setAmount] = useState("1000");
   const [leverage, setLeverage] = useState("1");
   const [limitPrice, setLimitPrice] = useState("");
@@ -180,7 +172,7 @@ export function IntegratedTerminal() {
     [state, selectedInstrumentId],
   );
   useEffect(() => {
-    if (!instrument) return;
+    if (!instrument || typeof EventSource === "undefined") return;
     const streamSymbol = instrument.symbol;
     const events = new EventSource(
       `/api/market/stream?symbol=${encodeURIComponent(streamSymbol)}`,
@@ -192,6 +184,7 @@ export function IntegratedTerminal() {
         );
         if (isStreamTick(parsed)) {
           setTick(parsed);
+          setLimitPrice((current) => current || parsed.price);
           setConnectionSnapshot({
             symbol: streamSymbol,
             value: parsed.connection,
@@ -301,6 +294,42 @@ export function IntegratedTerminal() {
         : exposure.gte(25)
           ? 72
           : 92;
+  const completedTrades = state.trades.filter((trade) => trade.closedAt);
+  const winningTrades = completedTrades.filter((trade) =>
+    new Decimal(trade.realizedPnl).gt(0),
+  );
+  const winRate = completedTrades.length
+    ? new Decimal(winningTrades.length)
+        .div(completedTrades.length)
+        .mul(100)
+        .toFixed(0)
+    : "0";
+  const bestTrade = completedTrades.reduce(
+    (best, trade) => Decimal.max(best, trade.realizedPnl),
+    new Decimal(0),
+  );
+  const worstTrade = completedTrades.reduce(
+    (worst, trade) => Decimal.min(worst, trade.realizedPnl),
+    new Decimal(0),
+  );
+  const grossProfit = completedTrades.reduce(
+    (total, trade) =>
+      new Decimal(trade.realizedPnl).gt(0)
+        ? total.plus(trade.realizedPnl)
+        : total,
+    new Decimal(0),
+  );
+  const grossLoss = completedTrades.reduce(
+    (total, trade) =>
+      new Decimal(trade.realizedPnl).lt(0)
+        ? total.plus(new Decimal(trade.realizedPnl).abs())
+        : total,
+    new Decimal(0),
+  );
+  const profitFactor = grossLoss.gt(0)
+    ? grossProfit.div(grossLoss).toFixed(2)
+    : "N/A";
+  const orderValue = decimalOrZero(amount);
 
   function setQuickAmount(value: number) {
     setAmount(
@@ -419,15 +448,21 @@ export function IntegratedTerminal() {
           {connection === "DEMO" ? "SIM" : connection}{" "}
           {new Decimal(mark).gt(0) ? money(mark) : "—"}
         </strong>
+        <span className="fusion-demo-badge">
+          {connection === "DEMO" ? "DEMO DATA" : connection}
+        </span>
         <div className="fusion-top-meta">
           <span>
             Data source<strong>{instrument.source}</strong>
           </span>
           <span>
-            Chart<strong>TradingView public</strong>
+            Confidence<strong>{tick?.confidence ?? "N/A"}</strong>
           </span>
           <span>
-            Execution<strong>Axiom server</strong>
+            Market<strong>{tick?.status ?? "N/A"}</strong>
+          </span>
+          <span>
+            Funding<strong>N/A</strong>
           </span>
         </div>
         <div className="fusion-account-meta">
@@ -483,6 +518,20 @@ export function IntegratedTerminal() {
               <span>Progress</span>
               <strong>{progress.toFixed(2)}%</strong>
             </div>
+            <div className="fusion-rule-row">
+              <span>Max Daily Loss</span>
+              <strong>
+                {percent(state.risk.dailyDrawdownPct)} /{" "}
+                {rules ? percent(rules.maxDailyLossPct) : "—"}
+              </strong>
+            </div>
+            <div className="fusion-rule-row">
+              <span>Max Overall Loss</span>
+              <strong>
+                {percent(state.risk.overallDrawdownPct)} /{" "}
+                {rules ? percent(rules.maxOverallLossPct) : "—"}
+              </strong>
+            </div>
           </section>
           <section>
             <div className="fusion-section-title">
@@ -496,19 +545,24 @@ export function IntegratedTerminal() {
                 </dd>
               </div>
               <div>
-                <dt>Open positions</dt>
-                <dd>{positions.length}</dd>
+                <dt>Win Rate</dt>
+                <dd>{winRate}%</dd>
               </div>
               <div>
-                <dt>Used margin</dt>
-                <dd>{money(usedMargin.toString())}</dd>
+                <dt>Total Trades</dt>
+                <dd>{completedTrades.length}</dd>
               </div>
               <div>
-                <dt>Trading days</dt>
-                <dd>
-                  {state.challenge?.tradingDays ?? 0} /{" "}
-                  {rules?.minTradingDays ?? "—"}
-                </dd>
+                <dt>Best Trade</dt>
+                <dd className="green">{money(bestTrade.toString(), true)}</dd>
+              </div>
+              <div>
+                <dt>Worst Trade</dt>
+                <dd className="red">{money(worstTrade.toString(), true)}</dd>
+              </div>
+              <div>
+                <dt>Profit Factor</dt>
+                <dd>{profitFactor}</dd>
               </div>
             </dl>
           </section>
@@ -558,19 +612,6 @@ export function IntegratedTerminal() {
         >
           <div className="fusion-chart-zone" ref={chartZone}>
             <div className="fusion-chart-head">
-              <strong>{instrument.symbol.replace("/", "")}</strong>
-              <div className="fusion-intervals" aria-label="Chart timeframe">
-                {timeframes.map((item) => (
-                  <button
-                    key={item}
-                    className={item === timeframe ? "active" : ""}
-                    aria-pressed={item === timeframe}
-                    onClick={() => setTimeframe(item)}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
               <button
                 className="fusion-fullscreen"
                 onClick={() => void chartZone.current?.requestFullscreen()}
@@ -578,10 +619,7 @@ export function IntegratedTerminal() {
                 Fullscreen
               </button>
             </div>
-            <TradingViewWidget
-              symbol={instrument.symbol}
-              timeframe={timeframe}
-            />
+            <TradingViewWidget symbol={instrument.symbol} timeframe="15m" />
           </div>
 
           <section
@@ -605,8 +643,19 @@ export function IntegratedTerminal() {
               ))}
             </div>
             <div className="fusion-order-fields">
+              {orderKind !== "MARKET" && (
+                <label>
+                  Price (USDT)
+                  <input
+                    aria-label="Limit price"
+                    inputMode="decimal"
+                    value={limitPrice}
+                    onChange={(event) => setLimitPrice(event.target.value)}
+                  />
+                </label>
+              )}
               <label>
-                Size (USD)
+                Amount (USD)
                 <input
                   aria-label="Размер позиции в USD"
                   inputMode="decimal"
@@ -626,17 +675,6 @@ export function IntegratedTerminal() {
                   ))}
                 </select>
               </label>
-              {orderKind !== "MARKET" && (
-                <label>
-                  Limit price
-                  <input
-                    aria-label="Limit price"
-                    inputMode="decimal"
-                    value={limitPrice}
-                    onChange={(event) => setLimitPrice(event.target.value)}
-                  />
-                </label>
-              )}
               {orderKind === "STOP_LIMIT" && (
                 <label>
                   Stop price
@@ -656,6 +694,20 @@ export function IntegratedTerminal() {
                 </button>
               ))}
             </div>
+            <dl className="fusion-order-summary">
+              <div>
+                <dt>Order Value</dt>
+                <dd>{money(orderValue.toString())}</dd>
+              </div>
+              <div>
+                <dt>Available</dt>
+                <dd>{money(state.account.balance)}</dd>
+              </div>
+              <div>
+                <dt>Expected mark</dt>
+                <dd>{new Decimal(mark).gt(0) ? money(mark) : "N/A"}</dd>
+              </div>
+            </dl>
             <div className="fusion-order-grid">
               <article className="fusion-order-card long">
                 <div>
@@ -673,24 +725,13 @@ export function IntegratedTerminal() {
                   </div>
                 </dl>
                 <button
+                  aria-label="Open Long"
                   disabled={!canTrade || busy}
                   onClick={() => setConfirmation("LONG")}
                 >
-                  Open Long
+                  <strong>Long</strong>
+                  <small>Demo Trading</small>
                 </button>
-              </article>
-              <article className="fusion-score-card">
-                <span>Risk Score</span>
-                <strong>
-                  {riskScore}
-                  <small>/100</small>
-                </strong>
-                <div className="fusion-sparkline" />
-                <p>
-                  {riskBlocked
-                    ? "Trading blocked by risk rules"
-                    : `Exposure ${exposure.toFixed(2)}% · ${connection}`}
-                </p>
               </article>
               <article className="fusion-order-card short">
                 <div>
@@ -708,10 +749,12 @@ export function IntegratedTerminal() {
                   </div>
                 </dl>
                 <button
+                  aria-label="Open Short"
                   disabled={!canTrade || busy}
                   onClick={() => setConfirmation("SHORT")}
                 >
-                  Open Short
+                  <strong>Short</strong>
+                  <small>Demo Trading</small>
                 </button>
               </article>
             </div>
@@ -892,13 +935,35 @@ export function IntegratedTerminal() {
               <h2>Risk Coach</h2>
               <span>SERVER</span>
             </div>
-            <div>
+            <div className="fusion-coach-score">
+              <span>Account score</span>
+              <strong>
+                {riskScore}
+                <small>/100</small>
+              </strong>
+              <div className="fusion-sparkline" />
+            </div>
+            <dl className="fusion-coach-metrics">
+              <div>
+                <dt>Risk</dt>
+                <dd>{riskBlocked ? "Blocked" : "Controlled"}</dd>
+              </div>
+              <div>
+                <dt>Reward / Risk</dt>
+                <dd>{profitFactor}</dd>
+              </div>
+              <div>
+                <dt>Win Probability</dt>
+                <dd>{winRate}%</dd>
+              </div>
+            </dl>
+            <p className="fusion-coach-note">
               {riskBlocked
                 ? state.challenge?.violations[0]?.message
                 : positions.length
                   ? `Open positions: ${positions.length}. Current exposure ${exposure.toFixed(2)}%.`
-                  : "Open a virtual position and the server risk engine will evaluate the account."}
-            </div>
+                  : "No open exposure. Server risk limits allow a simulated trade."}
+            </p>
             <small>Rules are calculated by the Axiom server.</small>
           </section>
         </aside>

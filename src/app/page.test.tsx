@@ -112,7 +112,10 @@ describe("HomePage", () => {
         "TradingView public widget · reference chart only · execution uses Axiom demo feed",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "1M" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Fullscreen" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Chart timeframe")).not.toBeInTheDocument();
   });
 
   it("switches order type and requires confirmation before submitting", async () => {
