@@ -114,7 +114,9 @@ Daily and overall loss limits breach inclusively at the configured percentage. E
 
 ## Market data gateway
 
-`MARKET_DATA_MODE=demo` exposes a deterministic SSE feed at `/api/market/stream` and labels every event `DEMO`. The browser contract distinguishes `LIVE`, `DEMO`, `RECONNECTING`, `STALE`, and `ERROR`; unsupported volume, funding, and open-interest fields are returned as `null` and rendered as `N/A`. Pyth integer price and confidence values are normalized with their exponent on the server. The API key is read only by the server adapter and never included in URLs, responses, or logs. A tick is executable through the configured stale threshold, then new execution is rejected. Reconnect clients use capped exponential backoff, and OHLC aggregation de-duplicates identical ticks before building timestamp buckets.
+`MARKET_DATA_MODE=demo` exposes deterministic instruments, history and an SSE stream through `/api/market/instruments`, `/api/market/history`, and `/api/market/stream`; every response is labelled `DEMO`. The browser contract distinguishes `LIVE`, `DEMO`, `RECONNECTING`, `STALE`, and `ERROR`; unsupported volume, funding, and open-interest fields are returned as `null` and rendered as `N/A`.
+
+In `pyth` mode the server uses the Pyth Lazer metadata, history and latest-price APIs plus three redundant official WebSocket endpoints. Integer price and confidence values are normalized with their exponent, and freshness uses the feed update timestamp rather than receipt time. The API key is carried only in server-side authorization and WebSocket protocol configuration; it is never included in URLs, browser responses, or application logs. The installed client reconnects with capped backoff, while the SSE gateway emits heartbeats and changes to `STALE` when no fresh feed timestamp arrives within `MARKET_STALE_AFTER_MS`. A stale or halted tick is rejected by authoritative execution. OHLC aggregation de-duplicates identical ticks before building timestamp buckets.
 
 ## Transactional trading API
 
@@ -136,13 +138,16 @@ The current chart is the official public TradingView embed and is explicitly lab
 
 ## Environment variables
 
-| Name               | Exposure             | Purpose                                          |
-| ------------------ | -------------------- | ------------------------------------------------ |
-| `DATABASE_URL`     | server-only          | PostgreSQL connection string                     |
-| `PYTH_PRO_API_KEY` | server-only          | Pyth Pro API credential; empty in demo mode      |
-| `PYTH_CHANNEL`     | server-only          | Pyth streaming channel                           |
-| `MARKET_DATA_MODE` | server configuration | `pyth` or visibly labelled `demo` mode           |
-| `CHART_ENGINE`     | server configuration | `tradingview` or `lightweight` adapter selection |
+| Name                      | Exposure             | Purpose                                          |
+| ------------------------- | -------------------- | ------------------------------------------------ |
+| `DATABASE_URL`            | server-only          | PostgreSQL connection string                     |
+| `PYTH_PRO_API_KEY`        | server-only          | Pyth Pro API credential; empty in demo mode      |
+| `PYTH_CHANNEL`            | server-only          | Pyth streaming channel                           |
+| `MARKET_DATA_MODE`        | server configuration | `pyth` or visibly labelled `demo` mode           |
+| `MARKET_STALE_AFTER_MS`   | server configuration | Maximum executable feed age in milliseconds      |
+| `MARKET_HEARTBEAT_MS`     | server configuration | SSE heartbeat interval in milliseconds           |
+| `MARKET_DEMO_INTERVAL_MS` | server configuration | Demo-feed interval in milliseconds               |
+| `CHART_ENGINE`            | server configuration | `tradingview` or `lightweight` adapter selection |
 
 ## Planning documents
 

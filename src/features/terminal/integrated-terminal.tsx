@@ -52,6 +52,16 @@ function isStreamTick(value: unknown): value is StreamTick {
   );
 }
 
+function isConnectionState(value: unknown): value is StreamTick["connection"] {
+  return (
+    value === "LIVE" ||
+    value === "DEMO" ||
+    value === "RECONNECTING" ||
+    value === "STALE" ||
+    value === "ERROR"
+  );
+}
+
 function LoginPanel({ onAuthenticated }: { onAuthenticated(): Promise<void> }) {
   const [email, setEmail] = useState("demo@axiom.local");
   const [password, setPassword] = useState("AxiomDemo!2026");
@@ -115,8 +125,10 @@ export function IntegratedTerminal() {
   const [loadError, setLoadError] = useState("");
   const [selectedInstrumentId, setSelectedInstrumentId] = useState("");
   const [tick, setTick] = useState<StreamTick | null>(null);
-  const [connection, setConnection] =
-    useState<StreamTick["connection"]>("RECONNECTING");
+  const [connectionSnapshot, setConnectionSnapshot] = useState<{
+    symbol: string;
+    value: StreamTick["connection"];
+  }>({ symbol: "", value: "RECONNECTING" });
   const [timeframe, setTimeframe] =
     useState<(typeof timeframes)[number]>("15m");
   const [orderKind, setOrderKind] = useState<OrderKind>("MARKET");
@@ -169,8 +181,9 @@ export function IntegratedTerminal() {
   );
   useEffect(() => {
     if (!instrument) return;
+    const streamSymbol = instrument.symbol;
     const events = new EventSource(
-      `/api/market/stream?symbol=${encodeURIComponent(instrument.symbol)}`,
+      `/api/market/stream?symbol=${encodeURIComponent(streamSymbol)}`,
     );
     events.addEventListener("tick", (event) => {
       try {
@@ -179,13 +192,36 @@ export function IntegratedTerminal() {
         );
         if (isStreamTick(parsed)) {
           setTick(parsed);
-          setConnection(parsed.connection);
+          setConnectionSnapshot({
+            symbol: streamSymbol,
+            value: parsed.connection,
+          });
         }
       } catch {
-        setConnection("ERROR");
+        setConnectionSnapshot({ symbol: streamSymbol, value: "ERROR" });
       }
     });
-    events.onerror = () => setConnection("RECONNECTING");
+    events.addEventListener("state", (event) => {
+      try {
+        const parsed: unknown = JSON.parse(
+          (event as MessageEvent<string>).data,
+        );
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "connection" in parsed &&
+          isConnectionState(parsed.connection)
+        )
+          setConnectionSnapshot({
+            symbol: streamSymbol,
+            value: parsed.connection,
+          });
+      } catch {
+        setConnectionSnapshot({ symbol: streamSymbol, value: "ERROR" });
+      }
+    });
+    events.onerror = () =>
+      setConnectionSnapshot({ symbol: streamSymbol, value: "RECONNECTING" });
     return () => events.close();
   }, [instrument]);
 
@@ -209,6 +245,10 @@ export function IntegratedTerminal() {
 
   const currentState = state;
   const currentInstrument = instrument;
+  const connection =
+    connectionSnapshot.symbol === instrument.symbol
+      ? connectionSnapshot.value
+      : "RECONNECTING";
 
   const mark =
     tick?.symbol === instrument.symbol
@@ -231,7 +271,7 @@ export function IntegratedTerminal() {
   const canTrade =
     state.account.status === "ACTIVE" &&
     state.challenge?.status === "ACTIVE" &&
-    connection === "DEMO" &&
+    (connection === "DEMO" || connection === "LIVE") &&
     new Decimal(mark).gt(0);
   const positions = state.positions;
   const selectedPositions = positions.filter(
