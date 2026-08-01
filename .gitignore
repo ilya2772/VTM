@@ -10,6 +10,7 @@
 /coverage
 /playwright-report
 /test-results
+/artifacts
 
 # local environment files
 .env

@@ -6,7 +6,7 @@ import { chartResolutions } from "@/shared/chart";
 export const dynamic = "force-dynamic";
 
 const querySchema = z.object({
-  symbol: z.enum(["BTC/USD", "ETH/USD"]),
+  symbol: z.enum(["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"]),
   resolution: z.enum(chartResolutions),
   from: z.coerce.number().int().nonnegative(),
   to: z.coerce.number().int().positive(),

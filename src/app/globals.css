@@ -895,6 +895,26 @@ a:focus-visible,
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
+.fusion-feed-state {
+  min-width: max-content;
+  padding: 4px 7px;
+  border: 1px solid #245640;
+  border-radius: 4px;
+  color: var(--f-green);
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+.fusion-feed-state.demo {
+  border-color: #745819;
+  color: #f6ae2d;
+}
+.fusion-feed-state.stale,
+.fusion-feed-state.error,
+.fusion-feed-state.reconnecting {
+  border-color: #70404a;
+  color: #ff8490;
+}
 .fusion-top-meta,
 .fusion-account-meta {
   display: flex;
@@ -944,7 +964,7 @@ a:focus-visible,
 .fusion-terminal {
   min-height: 0;
   display: grid;
-  grid-template-columns: 42px 190px minmax(560px, 1fr) 278px;
+  grid-template-columns: 190px minmax(620px, 1fr) 278px;
   gap: 1px;
   background: var(--f-line);
 }
@@ -1010,7 +1030,7 @@ a:focus-visible,
   color: white;
 }
 .product-workspace {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   min-width: 0;
   overflow-y: auto;
   padding: 22px;
@@ -1260,13 +1280,14 @@ a:focus-visible,
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(450px, 1fr) auto;
+  grid-template-rows: minmax(520px, 1fr) auto;
 }
 .fusion-chart-zone {
+  position: relative;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 38px minmax(410px, 1fr);
+  grid-template-rows: minmax(520px, 1fr);
 }
 .fusion-chart-head {
   min-width: 0;
@@ -1308,6 +1329,17 @@ a:focus-visible,
 .fusion-fullscreen {
   margin-left: auto;
   font-size: 8px;
+}
+.fusion-fullscreen-overlay {
+  position: absolute;
+  z-index: 8;
+  top: 8px;
+  right: 10px;
+  padding: 7px 9px;
+  border: 1px solid #344050;
+  border-radius: 4px;
+  background: #080d13e8;
+  color: #dce4ed;
 }
 .tv-frame {
   position: relative;
@@ -1439,7 +1471,7 @@ a:focus-visible,
 }
 .fusion-order-fields {
   display: grid;
-  grid-template-columns: repeat(4, minmax(95px, 1fr));
+  grid-template-columns: repeat(5, minmax(95px, 1fr));
   gap: 7px;
 }
 .fusion-order-fields label {
@@ -1968,13 +2000,7 @@ a:focus-visible,
 }
 @media (max-width: 1250px) {
   .fusion-terminal {
-    grid-template-columns: 42px minmax(560px, 1fr) 268px;
-  }
-  .fusion-leftbar {
-    display: none;
-  }
-  .fusion-top-meta {
-    display: none;
+    grid-template-columns: 170px minmax(480px, 1fr) 250px;
   }
 }
 @media (max-width: 900px) {
@@ -2007,7 +2033,7 @@ a:focus-visible,
     grid-template-rows: 540px auto;
   }
   .fusion-chart-zone {
-    grid-template-rows: 38px 502px;
+    grid-template-rows: 540px;
   }
   .fusion-rightbar {
     order: 2;
@@ -2042,7 +2068,7 @@ a:focus-visible,
     grid-template-rows: 500px auto;
   }
   .fusion-chart-zone {
-    grid-template-rows: 38px 462px;
+    grid-template-rows: 500px;
   }
   .fusion-chart-head > strong,
   .fusion-fullscreen {

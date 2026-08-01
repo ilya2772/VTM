@@ -219,15 +219,6 @@ export async function previewOrder(
         },
         take: 1,
       },
-      positions: {
-        where: {
-          status: "OPEN",
-          instrumentId: command.instrumentId,
-          side: command.side,
-        },
-        select: { id: true },
-        take: 1,
-      },
     },
   });
   if (!account || account.status !== "ACTIVE")
@@ -244,12 +235,6 @@ export async function previewOrder(
   });
   if (!instrument || instrument.symbol !== tick.symbol)
     throw new ApiError(400, "INSTRUMENT_INVALID", "Instrument is unavailable.");
-  if (account.positions.length > 0)
-    throw new ApiError(
-      409,
-      "POSITION_EXISTS",
-      "Close the existing position before opening another in this direction.",
-    );
   return calculateOrderPreview(
     command,
     tick,
@@ -290,7 +275,6 @@ export async function placeOrder(
           },
           take: 1,
         },
-        positions: { where: { status: "OPEN" } },
       },
     });
     if (!account || account.status !== "ACTIVE")
@@ -315,25 +299,6 @@ export async function placeOrder(
         "INSTRUMENT_INVALID",
         "Instrument is unavailable.",
       );
-    if (account.positions.length > 0)
-      throw new ApiError(
-        409,
-        "POSITION_EXISTS",
-        "Close the existing position before opening another in this direction.",
-      );
-    if (
-      account.positions.some(
-        (position) =>
-          position.instrumentId === instrument.id &&
-          position.side === command.side,
-      )
-    ) {
-      throw new ApiError(
-        409,
-        "POSITION_EXISTS",
-        "Close the existing position before opening another in this direction.",
-      );
-    }
     const preview = calculateOrderPreview(
       {
         type: command.type,

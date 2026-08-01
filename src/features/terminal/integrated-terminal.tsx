@@ -184,7 +184,6 @@ export function IntegratedTerminal() {
   const [selectedInstrumentId, setSelectedInstrumentId] = useState("");
   const [workspace, setWorkspace] = useState<ProductWorkspace>("Trade");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [chartType, setChartType] = useState("Candles");
   const [tick, setTick] = useState<StreamTick | null>(null);
   const [connection, setConnection] =
     useState<StreamTick["connection"]>("RECONNECTING");
@@ -248,7 +247,6 @@ export function IntegratedTerminal() {
     if (next.chartLayout) {
       if (timeframes.some((item) => item === next.chartLayout?.timeframe))
         setTimeframe(next.chartLayout.timeframe as (typeof timeframes)[number]);
-      setChartType(next.chartLayout.chartType);
       setTheme(next.chartLayout.theme);
       document.documentElement.dataset.theme = next.chartLayout.theme;
     }
@@ -321,6 +319,11 @@ export function IntegratedTerminal() {
     };
   }, [instrument]);
 
+  const activeConnection =
+    instrument && tick?.symbol === instrument.symbol
+      ? connection
+      : "RECONNECTING";
+
   const orderFieldsValid =
     isPositiveInput(amount) &&
     isPositiveInput(leverage) &&
@@ -333,7 +336,7 @@ export function IntegratedTerminal() {
     state?.account.status === "ACTIVE" &&
     state.challenge?.status === "ACTIVE" &&
     !state.challenge.violations.some((violation) => violation.blocksTrading) &&
-    (connection === "DEMO" || connection === "LIVE") &&
+    (activeConnection === "DEMO" || activeConnection === "LIVE") &&
     orderFieldsValid;
   useEffect(() => {
     const controller = new AbortController();
@@ -398,7 +401,7 @@ export function IntegratedTerminal() {
     };
   }, [
     amount,
-    connection,
+    activeConnection,
     instrument,
     leverage,
     limitPrice,
@@ -432,12 +435,7 @@ export function IntegratedTerminal() {
   const currentState = state;
   const currentInstrument = instrument;
 
-  const mark =
-    tick?.symbol === instrument.symbol
-      ? tick.price
-      : (state.positions.find(
-          (position) => position.instrumentId === instrument.id,
-        )?.markPrice ?? "0");
+  const mark = tick?.symbol === instrument.symbol ? tick.price : "0";
   const rules = state.challenge?.rules;
   const profit = new Decimal(state.account.equity).minus(
     state.account.initialBalance,
@@ -453,11 +451,17 @@ export function IntegratedTerminal() {
   const canTrade =
     state.account.status === "ACTIVE" &&
     state.challenge?.status === "ACTIVE" &&
-    (connection === "DEMO" || connection === "LIVE") &&
+    (activeConnection === "DEMO" || activeConnection === "LIVE") &&
     new Decimal(mark).gt(0);
   const positions = state.positions;
   const selectedPositions = positions.filter(
     (position) => position.instrumentId === instrument.id,
+  );
+  const selectedOrders = state.orders.filter(
+    (order) => order.symbol === instrument.symbol,
+  );
+  const selectedTrades = state.trades.filter(
+    (trade) => trade.symbol === instrument.symbol,
   );
   const usedMargin = positions.reduce(
     (sum, position) =>
@@ -707,7 +711,7 @@ export function IntegratedTerminal() {
       kind: "CHART_LAYOUT",
       symbol: instrument.symbol,
       timeframe,
-      chartType,
+      chartType: "Candles",
       theme: nextTheme,
     });
   }
@@ -730,20 +734,20 @@ export function IntegratedTerminal() {
           <span>★</span>
         </div>
         <strong className="fusion-live-price">
-          {connection === "DEMO" ? "SIM" : connection}{" "}
-          {new Decimal(mark).gt(0) ? money(mark) : "—"}
+          {(activeConnection === "LIVE" || activeConnection === "DEMO") &&
+          new Decimal(mark).gt(0)
+            ? money(mark)
+            : activeConnection === "STALE"
+              ? "STALE"
+              : "Unavailable"}
         </strong>
-        <div className="fusion-top-meta">
-          <span>
-            Data source<strong>{instrument.source}</strong>
+        {activeConnection !== "LIVE" && activeConnection !== "DEMO" && (
+          <span
+            className={`fusion-feed-state ${activeConnection.toLowerCase()}`}
+          >
+            {activeConnection}
           </span>
-          <span>
-            Chart<strong>Axiom demo</strong>
-          </span>
-          <span>
-            Execution<strong>Axiom server</strong>
-          </span>
-        </div>
+        )}
         <div className="fusion-account-meta">
           <span>
             Balance<strong>{money(state.account.balance)}</strong>
@@ -781,19 +785,6 @@ export function IntegratedTerminal() {
       </nav>
 
       <main className="fusion-terminal">
-        <nav className="fusion-rail" aria-label="Разделы терминала">
-          {productWorkspaces.map((item) => (
-            <button
-              key={item}
-              title={item}
-              aria-label={item}
-              className={workspace === item ? "active" : ""}
-              onClick={() => setWorkspace(item)}
-            >
-              {item.slice(0, 1)}
-            </button>
-          ))}
-        </nav>
         <aside
           hidden={workspace !== "Trade"}
           className="fusion-leftbar"
@@ -848,35 +839,6 @@ export function IntegratedTerminal() {
           </section>
           <section>
             <div className="fusion-section-title">
-              <h2>Recent trades</h2>
-              <span>{state.trades.length}</span>
-            </div>
-            <div className="fusion-recent-trades">
-              {state.trades.length ? (
-                state.trades.slice(0, 3).map((trade) => (
-                  <div key={trade.id}>
-                    <span>
-                      <strong>
-                        {trade.symbol.replace("/", "")} {trade.side}
-                      </strong>
-                      <small>{trade.action}</small>
-                    </span>
-                    <em
-                      className={
-                        new Decimal(trade.realizedPnl).gte(0) ? "green" : "red"
-                      }
-                    >
-                      {money(trade.realizedPnl, true)}
-                    </em>
-                  </div>
-                ))
-              ) : (
-                <small>No simulated trades yet.</small>
-              )}
-            </div>
-          </section>
-          <section>
-            <div className="fusion-section-title">
               <h2>Markets</h2>
               <span>{state.instruments.length}</span>
             </div>
@@ -891,7 +853,6 @@ export function IntegratedTerminal() {
                     <strong>{item.symbol.replace("/", "")}</strong>
                     <small>{item.displayName}</small>
                   </span>
-                  <em>{item.source}</em>
                 </button>
               ))}
             </div>
@@ -921,27 +882,12 @@ export function IntegratedTerminal() {
           aria-label="Торговый терминал"
         >
           <div className="fusion-chart-zone" ref={chartZone}>
-            <div className="fusion-chart-head">
-              <strong>{instrument.symbol.replace("/", "")}</strong>
-              <div className="fusion-intervals" aria-label="Chart timeframe">
-                {timeframes.map((item) => (
-                  <button
-                    key={item}
-                    className={item === timeframe ? "active" : ""}
-                    aria-pressed={item === timeframe}
-                    onClick={() => setTimeframe(item)}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-              <button
-                className="fusion-fullscreen"
-                onClick={() => void chartZone.current?.requestFullscreen()}
-              >
-                Fullscreen
-              </button>
-            </div>
+            <button
+              className="fusion-fullscreen fusion-fullscreen-overlay"
+              onClick={() => void chartZone.current?.requestFullscreen()}
+            >
+              Fullscreen
+            </button>
             <TradingViewWidget
               symbol={instrument.symbol}
               timeframe={timeframe}
@@ -1101,7 +1047,7 @@ export function IntegratedTerminal() {
                 <p>
                   {riskBlocked
                     ? "Trading blocked by risk rules"
-                    : `Exposure ${exposure.toFixed(2)}% · ${connection}`}
+                    : `Exposure ${exposure.toFixed(2)}%`}
                 </p>
               </article>
               <article className="fusion-order-card short">
@@ -1147,7 +1093,7 @@ export function IntegratedTerminal() {
               {message ||
                 (canTrade
                   ? "Server-authoritative simulated execution"
-                  : `Execution unavailable: ${connection}`)}
+                  : `Execution unavailable: ${activeConnection}`)}
             </p>
           </section>
         </section>
@@ -1169,7 +1115,7 @@ export function IntegratedTerminal() {
                   >
                     {item[0]}
                     {item.slice(1).toLowerCase()}{" "}
-                    {item === "POSITIONS" ? positions.length : ""}
+                    {item === "POSITIONS" ? selectedPositions.length : ""}
                   </button>
                 ),
               )}
@@ -1177,8 +1123,17 @@ export function IntegratedTerminal() {
             {activity === "POSITIONS" &&
               (selectedPositions.length ? (
                 selectedPositions.map((position) => {
-                  const livePnl = livePositionPnl(position, mark);
-                  const livePnlPct = livePositionPnlPct(position, livePnl);
+                  const liveMarkAvailable =
+                    position.markAvailable &&
+                    (activeConnection === "LIVE" ||
+                      activeConnection === "DEMO") &&
+                    isPositiveInput(mark);
+                  const livePnl = liveMarkAvailable
+                    ? livePositionPnl(position, mark)
+                    : null;
+                  const livePnlPct = livePnl
+                    ? livePositionPnlPct(position, livePnl)
+                    : null;
                   const editing = positionEditor?.positionId === position.id;
                   return (
                     <article
@@ -1189,15 +1144,24 @@ export function IntegratedTerminal() {
                       <div>
                         <strong>{position.symbol}</strong>
                         <span className={position.side.toLowerCase()}>
-                          {position.side} {position.leverage}× · {connection}
+                          {position.side} {position.leverage}×
                         </span>
                       </div>
                       <dl>
                         <div>
                           <dt>Live unrealized PnL</dt>
-                          <dd className={livePnl.gte(0) ? "green" : "red"}>
-                            {money(livePnl.toString(), true)} ·{" "}
-                            {livePnlPct.toFixed(2)}%
+                          <dd
+                            className={
+                              livePnl
+                                ? livePnl.gte(0)
+                                  ? "green"
+                                  : "red"
+                                : undefined
+                            }
+                          >
+                            {livePnl && livePnlPct
+                              ? `${money(livePnl.toString(), true)} · ${livePnlPct.toFixed(2)}%`
+                              : "Unavailable"}
                           </dd>
                         </div>
                         <div>
@@ -1211,7 +1175,7 @@ export function IntegratedTerminal() {
                         <div>
                           <dt>Live mark</dt>
                           <dd>
-                            {new Decimal(mark).gt(0) ? money(mark) : "N/A"}
+                            {liveMarkAvailable ? money(mark) : "Unavailable"}
                           </dd>
                         </div>
                         <div>
@@ -1240,7 +1204,10 @@ export function IntegratedTerminal() {
                         </div>
                         <div>
                           <dt>Source</dt>
-                          <dd>{instrument.source} · server tick</dd>
+                          <dd>
+                            {instrument.source} ·{" "}
+                            {liveMarkAvailable ? "server tick" : "unavailable"}
+                          </dd>
                         </div>
                       </dl>
                       <div className="fusion-position-actions">
@@ -1354,8 +1321,8 @@ export function IntegratedTerminal() {
                 </div>
               ))}
             {activity === "ORDERS" &&
-              (state.orders.length ? (
-                state.orders.map((order) => (
+              (selectedOrders.length ? (
+                selectedOrders.map((order) => (
                   <article className="fusion-list-row" key={order.id}>
                     <span>
                       <strong>
@@ -1380,8 +1347,8 @@ export function IntegratedTerminal() {
                 <div className="fusion-empty">No working orders.</div>
               ))}
             {activity === "HISTORY" &&
-              (state.trades.length ? (
-                state.trades.map((trade) => (
+              (selectedTrades.length ? (
+                selectedTrades.map((trade) => (
                   <article className="fusion-list-row" key={trade.id}>
                     <span>
                       <strong>
@@ -1527,7 +1494,6 @@ export function IntegratedTerminal() {
         <span>
           System <strong>● Simulation operational</strong>
         </span>
-        <span>{connection} market feed</span>
         <span>Real orders and fund transfers are disabled</span>
       </footer>
 

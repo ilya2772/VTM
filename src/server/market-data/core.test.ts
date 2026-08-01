@@ -69,8 +69,10 @@ describe("market-data normalization", () => {
     expect(first.openInterest).toBeNull();
   });
 
-  it("rejects unsupported demo symbols instead of silently using BTC prices", () => {
-    expect(() => demoTick("SOL/USD", 1, new Date())).toThrow(
+  it("supports all terminal demo symbols and rejects unknown ones", () => {
+    expect(demoTick("SOL/USD", 1, new Date()).symbol).toBe("SOL/USD");
+    expect(demoTick("XRP/USD", 1, new Date()).symbol).toBe("XRP/USD");
+    expect(() => demoTick("DOGE/USD", 1, new Date())).toThrow(
       "Unsupported demo symbol",
     );
   });

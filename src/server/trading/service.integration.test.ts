@@ -142,6 +142,52 @@ run("transactional execution integration", () => {
     ).toBe(0);
   });
 
+  it("opens multiple independent positions for the same market and side", async () => {
+    const tick = demoTick("BTC/USD", 15, now);
+    const positions = await Promise.all(
+      ["first", "second"].map((label) =>
+        placeOrder(
+          {
+            userId,
+            accountId,
+            instrumentId,
+            idempotencyKey: `multiple-${label}-${suffix}`,
+            type: "MARKET",
+            side: "LONG",
+            quantity: "0.02",
+            leverage: "2",
+            requestId: "integration-multiple",
+          },
+          tick,
+          now,
+        ),
+      ),
+    );
+
+    const openPositions = await prisma.position.findMany({
+      where: { accountId, status: "OPEN", side: "LONG" },
+    });
+    expect(openPositions).toHaveLength(2);
+    expect(new Set(positions.map(({ order }) => order.id)).size).toBe(2);
+
+    await Promise.all(
+      openPositions.map((position, index) =>
+        closeTradingPosition(
+          {
+            userId,
+            accountId,
+            positionId: position.id,
+            quantity: position.quantity.toString(),
+            idempotencyKey: `multiple-close-${index}-${suffix}`,
+            requestId: "integration-multiple",
+          },
+          tick,
+          now,
+        ),
+      ),
+    );
+  });
+
   it("serializes concurrent retries into one order and one position", async () => {
     const tick = demoTick("BTC/USD", 10, now);
     const key = `concurrent-${suffix}`;

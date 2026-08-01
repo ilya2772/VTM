@@ -5,6 +5,8 @@ import { useEffect, useRef } from "react";
 const symbolMap: Record<string, string> = {
   "BTC/USD": "PYTH:BTCUSD",
   "ETH/USD": "PYTH:ETHUSD",
+  "SOL/USD": "PYTH:SOLUSD",
+  "XRP/USD": "PYTH:XRPUSD",
 };
 
 const intervalMap: Record<string, string> = {

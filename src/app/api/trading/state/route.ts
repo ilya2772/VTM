@@ -4,7 +4,10 @@ import { Decimal } from "@/server/execution";
 import { requireSession } from "@/server/auth/session";
 import { prisma } from "@/server/db/client";
 import { calculatePnl } from "@/server/execution";
-import { demoTick } from "@/server/market-data";
+import {
+  assertConfiguredTickExecutable,
+  getConfiguredMarketTick,
+} from "@/server/market-data";
 import { errorResponse } from "@/server/http/api-error";
 import { getRequestContext } from "@/server/security/request-context";
 
@@ -16,7 +19,6 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireSession(request);
     const now = new Date();
-    const sequence = Math.floor(now.getTime() / 1000);
     const account = await prisma.tradingAccount.findFirstOrThrow({
       where: { userId: session.user.id },
       orderBy: { createdAt: "asc" },
@@ -71,8 +73,26 @@ export async function GET(request: NextRequest) {
         },
       }),
     ]);
+    const positionSymbols = [
+      ...new Set(
+        account.positions.map((position) => position.instrument.symbol),
+      ),
+    ];
+    const markEntries = await Promise.all(
+      positionSymbols.map(async (symbol) => {
+        try {
+          const tick = await getConfiguredMarketTick(symbol, now);
+          assertConfiguredTickExecutable(tick, now);
+          return [symbol, tick] as const;
+        } catch {
+          return [symbol, null] as const;
+        }
+      }),
+    );
+    const marks = new Map(markEntries);
     const positions = account.positions.map((position) => {
-      const mark = demoTick(position.instrument.symbol, sequence, now).price;
+      const liveTick = marks.get(position.instrument.symbol) ?? null;
+      const mark = liveTick?.price ?? position.entryPrice;
       const unrealizedPnl = calculatePnl({
         side: position.side,
         quantity: position.quantity.toString(),
@@ -87,6 +107,7 @@ export async function GET(request: NextRequest) {
         quantity: position.quantity.toString(),
         entryPrice: position.entryPrice.toString(),
         markPrice: mark.toString(),
+        markAvailable: liveTick !== null,
         leverage: position.leverage.toString(),
         liquidationPrice: position.liquidationPrice?.toString() ?? null,
         stopLoss: position.stopLoss?.toString() ?? null,
@@ -114,6 +135,12 @@ export async function GET(request: NextRequest) {
       .div(initialBalance)
       .mul(100);
     return NextResponse.json({
+      marketDataMode:
+        process.env.MARKET_DATA_MODE === "demo"
+          ? "DEMO"
+          : process.env.MARKET_DATA_MODE === "pyth"
+            ? "PYTH"
+            : "UNAVAILABLE",
       user: session.user,
       account: {
         id: account.id,

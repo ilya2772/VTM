@@ -17,14 +17,15 @@ import {
 } from "vitest";
 
 vi.mock("@/features/terminal/components/tradingview-widget", () => ({
-  TradingViewWidget: () => (
-    <div>TradingView tools · PYTH:BTCUSD market data</div>
+  TradingViewWidget: ({ symbol }: { symbol: string }) => (
+    <div>TradingView tools · PYTH:{symbol.replace("/", "")} market data</div>
   ),
 }));
 
 import HomePage from "./page";
 
 const terminalState = {
+  marketDataMode: "DEMO",
   user: {
     id: "demo-user",
     email: "demo@axiom.local",
@@ -61,6 +62,30 @@ const terminalState = {
       symbol: "BTC/USD",
       displayName: "Bitcoin / US Dollar",
       baseAsset: "BTC",
+      quoteAsset: "USD",
+      source: "DEMO",
+    },
+    {
+      id: "eth",
+      symbol: "ETH/USD",
+      displayName: "Ether / US Dollar",
+      baseAsset: "ETH",
+      quoteAsset: "USD",
+      source: "DEMO",
+    },
+    {
+      id: "sol",
+      symbol: "SOL/USD",
+      displayName: "Solana / US Dollar",
+      baseAsset: "SOL",
+      quoteAsset: "USD",
+      source: "DEMO",
+    },
+    {
+      id: "xrp",
+      symbol: "XRP/USD",
+      displayName: "XRP / US Dollar",
+      baseAsset: "XRP",
       quoteAsset: "USD",
       source: "DEMO",
     },
@@ -108,6 +133,7 @@ const managedTerminalState = {
       quantity: "0.01",
       entryPrice: "67000",
       markPrice: "67400",
+      markAvailable: true,
       leverage: "5",
       liquidationPrice: "53869.34673367",
       stopLoss: "65000",
@@ -149,12 +175,21 @@ class MockEventSource {
   constructor(readonly url: string) {}
   addEventListener(type: string, listener: EventListener) {
     if (type === "tick") {
+      const symbol = new URL(this.url, "http://localhost").searchParams.get(
+        "symbol",
+      );
+      const prices: Record<string, string> = {
+        "BTC/USD": "67500",
+        "ETH/USD": "3500",
+        "SOL/USD": "175",
+        "XRP/USD": "0.62",
+      };
       queueMicrotask(() =>
         listener(
           new MessageEvent("tick", {
             data: JSON.stringify({
-              symbol: "BTC/USD",
-              price: "67500",
+              symbol,
+              price: symbol ? prices[symbol] : "0",
               confidence: "0.5",
               publishedAt: "2026-07-26T12:00:00.000Z",
               source: "DEMO",
@@ -201,7 +236,11 @@ describe("HomePage", () => {
     expect(
       screen.getByText("TradingView tools · PYTH:BTCUSD market data"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "1M" })).toBeInTheDocument();
+    expect(screen.queryByText(/SIM \$/)).not.toBeInTheDocument();
+    for (const symbol of ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD"])
+      expect(
+        screen.getByRole("button", { name: new RegExp(`^${symbol}`) }),
+      ).toBeInTheDocument();
   });
 
   it("switches order type and requires confirmation before submitting", async () => {
@@ -350,61 +389,64 @@ describe("HomePage", () => {
     );
   });
 
-  it("opens every product workspace and persists watchlist and settings", async () => {
-    const fetchMock = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (
-          String(input) === "/api/terminal/preferences" &&
-          init?.method === "PUT"
-        )
-          return new Response(JSON.stringify({ saved: true }), { status: 200 });
-        if (String(input) === "/api/trading/orders/preview")
-          return new Response(JSON.stringify(orderPreview), { status: 200 });
-        return new Response(JSON.stringify(terminalState), { status: 200 });
-      },
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("switches chart, price feed and trade form from the Markets section", async () => {
     render(<HomePage />);
     await screen.findByText("AXIOM");
-    for (const name of [
-      "Dashboard",
-      "Markets",
-      "Watchlist",
-      "Journal",
-      "Leaderboard",
-      "Analytics",
-      "Settings",
-    ] as const) {
-      fireEvent.click(screen.getAllByRole("button", { name })[0]!);
-      expect(
-        screen.getByRole("region", { name: `${name} workspace` }),
-      ).toBeInTheDocument();
-    }
-    fireEvent.click(screen.getAllByRole("button", { name: "Markets" })[0]!);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add BTC/USD to watchlist" }),
-    );
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/terminal/preferences",
-        expect.objectContaining({
-          method: "PUT",
-          body: expect.stringContaining('"kind":"WATCHLIST"'),
-        }),
-      ),
-    );
-    fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[0]!);
-    fireEvent.change(screen.getByLabelText("Theme"), {
-      target: { value: "light" },
+    fireEvent.click(screen.getByRole("button", { name: /^ETHUSD/ }));
+    expect(
+      screen.getByText("TradingView tools · PYTH:ETHUSD market data"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Size (USD)")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Size unit"), {
+      target: { value: "ASSET" },
     });
+    expect(screen.getByText("Size (ETH)")).toBeInTheDocument();
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/terminal/preferences",
-        expect.objectContaining({
-          body: expect.stringContaining('"kind":"CHART_LAYOUT"'),
-        }),
-      ),
+      expect(screen.getByText("$3,500.00")).toBeInTheDocument(),
     );
+    expect(
+      screen.getByRole("navigation", { name: "Primary navigation" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
+    expect(
+      screen.getByRole("region", { name: "Dashboard workspace" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Trade" }));
+    expect(
+      screen.getByRole("region", { name: "Торговый терминал" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a stale feed explicitly and blocks new orders", async () => {
+    class StaleEventSource extends MockEventSource {
+      override addEventListener(type: string, listener: EventListener) {
+        if (type !== "tick") return;
+        queueMicrotask(() =>
+          listener(
+            new MessageEvent("tick", {
+              data: JSON.stringify({
+                symbol: "BTC/USD",
+                price: "67500",
+                confidence: "0.5",
+                publishedAt: "2026-07-26T11:00:00.000Z",
+                source: "PYTH",
+                status: "TRADING",
+                connection: "STALE",
+                volume: null,
+                fundingRate: null,
+                openInterest: null,
+              }),
+            }),
+          ),
+        );
+      }
+    }
+    vi.stubGlobal("EventSource", StaleEventSource);
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    expect((await screen.findAllByText("STALE")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Open Long" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Open Short" })).toBeDisabled();
   });
 
   it("shows the login panel when the server has no active session", async () => {

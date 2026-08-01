@@ -46,7 +46,7 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
-The checked-in environment example defaults to clearly identified demo market data and the open-source Lightweight Charts adapter. Replace placeholder database credentials locally; never commit real credentials.
+The checked-in environment example defaults to fail-closed Pyth mode. Configure the server-only `PYTH_PRO_API_KEY`, or explicitly select `MARKET_DATA_MODE=demo` for clearly labelled deterministic local data. Replace placeholder database credentials locally; never commit real credentials.
 
 ## Clean deployment
 
@@ -136,9 +136,9 @@ Daily and overall loss limits breach inclusively at the configured percentage. E
 
 ## Market data gateway
 
-`MARKET_DATA_MODE=demo` exposes a deterministic SSE feed at `/api/market/stream` and labels every event `DEMO`. The browser contract distinguishes `LIVE`, `DEMO`, `RECONNECTING`, `STALE`, and `ERROR`; unsupported volume, funding, and open-interest fields are returned as `null` and rendered as `N/A`. Pyth integer price and confidence values are normalized with their exponent on the server. The API key is read only by the server adapter and never included in URLs, responses, or logs. A tick is executable through the configured stale threshold, then new execution is rejected. Reconnect clients use capped exponential backoff, and OHLC aggregation de-duplicates identical ticks before building timestamp buckets.
+`MARKET_DATA_MODE=pyth` polls Pyth Pro's authenticated `/v1/latest_price` endpoint on the server for BTC/USD, ETH/USD, SOL/USD and XRP/USD, then exposes the selected feed through `/api/market/stream`. `MARKET_DATA_MODE=demo` uses the same server gateway with deterministic ticks and labels every market `DEMO`. The browser contract distinguishes `LIVE`, `DEMO`, `RECONNECTING`, `STALE`, and `ERROR`; unsupported volume, funding, and open-interest fields are returned as `null` and rendered as `N/A`. Pyth integer price and confidence values are normalized with their exponent on the server. The API key is never included in browser code, URLs, responses, or logs. A tick is executable only through `PYTH_STALE_AFTER_MS`; stale or unavailable prices block preview and new execution without a demo fallback.
 
-To request a Pyth Pro key, follow the [official Pyth key guide](https://docs.pyth.network/price-feeds/pro/acquire-api-key) and consult the [official API reference](https://docs.pyth.network/price-feeds/pro/api). Store the key only as `PYTH_PRO_API_KEY` on the server. The checked-in Pyth adapter currently normalizes authenticated history payloads, but the application route deliberately returns `503` when `MARKET_DATA_MODE=pyth`: the production WebSocket subscription and feed mapping are not enabled without a deployment-specific Pyth Pro integration. It never silently falls back to demo prices.
+To request a Pyth Pro key, follow the [official Pyth key guide](https://docs.pyth.network/price-feeds/pro/acquire-api-key) and consult the [official API reference](https://docs.pyth.network/price-feeds/pro/api). Store the key only as `PYTH_PRO_API_KEY` on the server. Pyth mode never silently falls back to demo prices. The internal historical-data route still returns `503` in Pyth mode; the visible TradingView embed supplies chart history independently and is never an execution-price source.
 
 ## Transactional trading API
 
@@ -148,7 +148,7 @@ Authenticated, same-origin requests create or cancel orders through `/api/tradin
 
 The terminal UI adapts the project-root `index.html` concept into the Next.js application. Account, challenge, position, order, trade and risk panels load from the authenticated PostgreSQL-backed server state. Market, Limit and Stop Limit intents use the transactional API; the browser does not determine the authoritative execution result.
 
-The default visual chart is TradingView's official public Advanced Chart embed using TradingView's Pyth symbols (`PYTH:BTCUSD` and `PYTH:ETHUSD`). It restores TradingView drawing tools and indicators while showing the live and historical Pyth Price Feeds distributed by TradingView. Simulated execution remains independent and server-authoritative through Axiom's Pyth/demo gateway; browser chart values are never accepted for execution.
+The default visual chart is TradingView's official public Advanced Chart embed using TradingView's Pyth symbols (`PYTH:BTCUSD`, `PYTH:ETHUSD`, `PYTH:SOLUSD`, and `PYTH:XRPUSD`). Market selection lives only in the left Markets panel and switches the chart, server feed, order ticket, positions and orders together. Simulated execution remains independent and server-authoritative through Axiom's Pyth/demo gateway; browser chart values are never accepted for execution.
 
 No licensed self-hosted TradingView Advanced Charts assets are included or imitated. The custom `ChartProvider` and Lightweight Charts implementation remains available in the codebase for a direct Axiom datafeed, but it is not the default visual chart while the official TradingView embed supplies the requested tools.
 
@@ -156,7 +156,7 @@ For a self-hosted Advanced Charts deployment, request access through the [offici
 
 The order ticket supports Market, Limit and Stop Limit for Long and Short, sizing in USD or asset units, leverage, quick percentages, Stop Loss and Take Profit. Before confirmation, the authenticated `/api/trading/orders/preview` endpoint converts size using the authoritative server price and validates account, challenge, stale-price and risk limits. The confirmation displays expected execution, fee, margin, liquidation, potential P/L and risk/reward. Submission reuses a stable idempotency key and repeats the same server calculations before creating any simulated order.
 
-Challenge progress, recent trades, positions, pending orders, history and risk limits are presented from the authenticated server state. Open-position PnL follows the selected instrument's live server tick without a page reload. Position controls update or clear protective targets and support exact partial or full simulated closes through server-authoritative APIs; pending orders can be cancelled. The risk panel shows daily and overall drawdown, remaining percentage and currency allowance, and explicit violation or trading-block explanations.
+Challenge progress, statistics, four markets, positions, pending orders, history and risk limits are presented from authenticated server state. Open-position PnL follows the selected instrument's live server tick without a page reload. Position controls update or clear protective targets and support exact partial or full market closes through server-authoritative APIs; pending Limit and Stop Limit orders can be cancelled. The risk panel shows daily and overall drawdown, remaining percentage and currency allowance, and explicit violation or trading-block explanations.
 
 Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are functional terminal workspaces rather than placeholders. Watchlist membership and the default chart layout are persisted for the authenticated user in PostgreSQL. Journal and analytics use recorded simulated trades, while the leaderboard ranks stored simulation accounts by realized return; unsupported market fields remain explicitly `N/A`.
 
@@ -179,18 +179,20 @@ Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are 
 
 ## Environment variables
 
-| Name               | Exposure             | Purpose                                          |
-| ------------------ | -------------------- | ------------------------------------------------ |
-| `DATABASE_URL`     | server-only          | PostgreSQL connection string                     |
-| `PYTH_PRO_API_KEY` | server-only          | Pyth Pro API credential; empty in demo mode      |
-| `PYTH_CHANNEL`     | server-only          | Pyth streaming channel                           |
-| `MARKET_DATA_MODE` | server configuration | `pyth` or visibly labelled `demo` mode           |
-| `CHART_ENGINE`     | server configuration | `tradingview` or `lightweight` adapter selection |
+| Name                  | Exposure             | Purpose                                          |
+| --------------------- | -------------------- | ------------------------------------------------ |
+| `DATABASE_URL`        | server-only          | PostgreSQL connection string                     |
+| `PYTH_PRO_API_KEY`    | server-only          | Pyth Pro API credential; empty in demo mode      |
+| `PYTH_CHANNEL`        | server-only          | Pyth streaming channel                           |
+| `PYTH_STALE_AFTER_MS` | server configuration | Maximum executable Pyth tick age                 |
+| `MARKET_DATA_MODE`    | server configuration | `pyth` or visibly labelled `demo` mode           |
+| `CHART_ENGINE`        | server configuration | `tradingview` or `lightweight` adapter selection |
 
 ## Known limitations
 
 - This is simulation software only. It cannot submit exchange orders, move funds, or perform blockchain transactions.
-- Live Pyth WebSocket routing is deployment work that requires Pyth Pro credentials and feed configuration; `pyth` mode fails closed with `503` in this repository.
+- Pyth mode requires a Pyth Pro key and uses server-side REST polling; redundant WebSocket routing remains deployment hardening work.
+- Closing an open position with a new Limit order is not supported by the current execution engine. Position-close controls execute market closes only.
 - The visible TradingView chart depends on TradingView's public network embed. Licensed self-hosted Advanced Charts assets are absent by design and must come from TradingView's restricted official repository.
 - Rate limits are safe for one application process only. Horizontal scaling requires a shared limiter.
 - The deterministic E2E harness depends on locally installed PostgreSQL 17 command-line server tools and currently runs Chromium only.

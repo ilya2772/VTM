@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const postgresPort = "55439";
+const postgresPort = process.env.AXIOM_E2E_POSTGRES_PORT ?? "55439";
 const databaseName = "axiom_e2e";
 
 function run(command: string, args: string[], env = process.env) {

@@ -253,8 +253,8 @@ model Position {
   instrument       Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
   trades           Trade[]
 
-  @@unique([accountId, instrumentId, side])
   @@index([accountId, status])
+  @@index([accountId, instrumentId, side, status])
 }
 
 model Trade {

@@ -88,9 +88,9 @@ async function main() {
         displayName: "Bitcoin / US Dollar",
         baseAsset: "BTC",
         quoteAsset: "USD",
-        source: "DEMO",
-        pythPriceFeedId: null,
-        priceExponent: null,
+        source: "PYTH",
+        pythPriceFeedId: "1",
+        priceExponent: -8,
         isActive: true,
       },
       create: {
@@ -99,7 +99,9 @@ async function main() {
         displayName: "Bitcoin / US Dollar",
         baseAsset: "BTC",
         quoteAsset: "USD",
-        source: "DEMO",
+        source: "PYTH",
+        pythPriceFeedId: "1",
+        priceExponent: -8,
       },
     });
 
@@ -109,9 +111,9 @@ async function main() {
         displayName: "Ether / US Dollar",
         baseAsset: "ETH",
         quoteAsset: "USD",
-        source: "DEMO",
-        pythPriceFeedId: null,
-        priceExponent: null,
+        source: "PYTH",
+        pythPriceFeedId: "2",
+        priceExponent: -8,
         isActive: true,
       },
       create: {
@@ -120,7 +122,55 @@ async function main() {
         displayName: "Ether / US Dollar",
         baseAsset: "ETH",
         quoteAsset: "USD",
-        source: "DEMO",
+        source: "PYTH",
+        pythPriceFeedId: "2",
+        priceExponent: -8,
+      },
+    });
+
+    await tx.instrument.upsert({
+      where: { symbol: "SOL/USD" },
+      update: {
+        displayName: "Solana / US Dollar",
+        baseAsset: "SOL",
+        quoteAsset: "USD",
+        source: "PYTH",
+        pythPriceFeedId: "6",
+        priceExponent: -8,
+        isActive: true,
+      },
+      create: {
+        id: "demo-instrument-sol-usd",
+        symbol: "SOL/USD",
+        displayName: "Solana / US Dollar",
+        baseAsset: "SOL",
+        quoteAsset: "USD",
+        source: "PYTH",
+        pythPriceFeedId: "6",
+        priceExponent: -8,
+      },
+    });
+
+    await tx.instrument.upsert({
+      where: { symbol: "XRP/USD" },
+      update: {
+        displayName: "XRP / US Dollar",
+        baseAsset: "XRP",
+        quoteAsset: "USD",
+        source: "PYTH",
+        pythPriceFeedId: "14",
+        priceExponent: -8,
+        isActive: true,
+      },
+      create: {
+        id: "demo-instrument-xrp-usd",
+        symbol: "XRP/USD",
+        displayName: "XRP / US Dollar",
+        baseAsset: "XRP",
+        quoteAsset: "USD",
+        source: "PYTH",
+        pythPriceFeedId: "14",
+        priceExponent: -8,
       },
     });
 

@@ -1,4 +1,5 @@
 export interface TerminalState {
+  marketDataMode: "PYTH" | "DEMO" | "UNAVAILABLE";
   user: { id: string; email: string; displayName: string };
   account: {
     id: string;
@@ -46,6 +47,7 @@ export interface TerminalState {
     quantity: string;
     entryPrice: string;
     markPrice: string;
+    markAvailable: boolean;
     leverage: string;
     liquidationPrice: string | null;
     stopLoss: string | null;

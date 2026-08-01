@@ -147,12 +147,17 @@ export function demoTick(
   publishedAt: Date,
 ): MarketTick {
   assertInteger(sequence, "sequence");
-  if (symbol !== "BTC/USD" && symbol !== "ETH/USD")
-    throw new Error("Unsupported demo symbol");
-  const base =
-    symbol === "ETH/USD" ? new Decimal("3500") : new Decimal("67500");
-  const increment =
-    symbol === "ETH/USD" ? new Decimal("0.75") : new Decimal("12.5");
+  const configuration: Readonly<Record<string, readonly [string, string]>> = {
+    "BTC/USD": ["67500", "12.5"],
+    "ETH/USD": ["3500", "0.75"],
+    "SOL/USD": ["175", "0.05"],
+    "XRP/USD": ["0.62", "0.0002"],
+  };
+  const values = configuration[symbol];
+  if (!values) throw new Error("Unsupported demo symbol");
+  const [baseValue, incrementValue] = values;
+  const base = new Decimal(baseValue);
+  const increment = new Decimal(incrementValue);
   const offset = new Decimal(String((sequence % 21) - 10));
   return {
     symbol,

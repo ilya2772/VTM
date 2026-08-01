@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const postgresPort = process.env.AXIOM_E2E_POSTGRES_PORT ?? "55439";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -25,8 +27,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       ...process.env,
-      DATABASE_URL:
-        "postgresql://postgres@127.0.0.1:55439/axiom_e2e?schema=public",
+      DATABASE_URL: `postgresql://postgres@127.0.0.1:${postgresPort}/axiom_e2e?schema=public`,
       MARKET_DATA_MODE: "demo",
       NEXT_DIST_DIR: ".next-e2e",
     },

@@ -18,27 +18,45 @@ test("completes the deterministic simulated trading journey", async ({
   await page.getByRole("button", { name: "Открыть терминал" }).click();
   await expect(page.getByText("AXIOM", { exact: true })).toBeVisible();
 
-  const bitcoin = page.getByRole("button", {
-    name: /BTCUSD Bitcoin \/ US Dollar DEMO/,
+  const solana = page.getByRole("button", {
+    name: /^SOLUSD Solana \/ US Dollar/,
   });
-  await bitcoin.click();
-  await expect(bitcoin).toHaveAttribute("aria-pressed", "true");
+  await solana.click();
+  await expect(solana).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".fusion-live-price")).toContainText("$");
+  await expect(page.getByText("DEMO DATA", { exact: true })).toHaveCount(0);
 
-  const fiveMinutes = page.getByRole("button", { name: "5m", exact: true });
-  await fiveMinutes.click();
-  await expect(fiveMinutes).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("textbox", { name: "Order size" }).fill("500");
+  await page.getByRole("combobox", { name: "Leverage" }).selectOption("2");
+  await page.getByRole("textbox", { name: "Stop Loss" }).fill("160");
+  await page.getByRole("textbox", { name: "Take Profit" }).fill("200");
 
   const openLong = page.getByRole("button", { name: "Open Long" });
   await expect(openLong).toBeEnabled();
   await openLong.click();
   const confirmation = page.getByRole("dialog", { name: "Confirm LONG" });
   await expect(confirmation).toBeVisible();
+  await expect(
+    confirmation.getByText("Risk / reward", { exact: true }),
+  ).toBeVisible();
   await confirmation.getByRole("button", { name: "Confirm LONG" }).click();
   await expect(page.getByRole("status")).toHaveText("LONG позиция открыта.");
 
-  const position = page.getByRole("article", {
-    name: "LONG position BTC/USD",
+  const positions = page.getByRole("article", {
+    name: "LONG position SOL/USD",
   });
+  await expect(positions).toHaveCount(1);
+
+  await openLong.click();
+  const secondConfirmation = page.getByRole("dialog", {
+    name: "Confirm LONG",
+  });
+  await secondConfirmation
+    .getByRole("button", { name: "Confirm LONG" })
+    .click();
+  await expect(positions).toHaveCount(2);
+
+  const position = positions.first();
   await expect(position).toBeVisible();
   const livePnl = position
     .locator("dt", { hasText: "Live unrealized PnL" })
@@ -50,31 +68,45 @@ test("completes the deterministic simulated trading journey", async ({
     .not.toBe(firstPnl);
 
   await position.getByRole("button", { name: "Edit SL/TP" }).click();
-  await position.getByLabel("Edit Stop Loss for LONG").fill("65000");
-  await position.getByLabel("Edit Take Profit for LONG").fill("70000");
+  await position.getByLabel("Edit Stop Loss for LONG").fill("165");
+  await position.getByLabel("Edit Take Profit for LONG").fill("205");
   await position.getByRole("button", { name: "Save SL/TP" }).click();
   await expect(
     page.getByText("Защитные уровни позиции обновлены."),
   ).toBeVisible();
 
+  await position.getByRole("button", { name: "25%" }).click();
+  await position.getByRole("button", { name: "Close quantity" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "Позиция частично закрыта.",
+  );
   await position.getByRole("button", { name: "Close full" }).click();
   await expect(page.getByRole("status")).toHaveText("Позиция закрыта.");
-  await expect(position).toHaveCount(0);
+  await expect(positions).toHaveCount(1);
+  await positions.first().getByRole("button", { name: "Close full" }).click();
+  await expect(positions).toHaveCount(0);
 
   await page.getByRole("tab", { name: "History" }).click();
-  await expect(page.getByText("BTC/USD CLOSE")).toBeVisible();
+  await expect(page.getByText("SOL/USD CLOSE").first()).toBeVisible();
 
-  await page
-    .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("button", { name: "Journal" })
+  await page.getByRole("tab", { name: "Positions 0" }).click();
+  await page.getByRole("textbox", { name: "Stop Loss" }).fill("190");
+  await page.getByRole("textbox", { name: "Take Profit" }).fill("150");
+  const openShort = page.getByRole("button", { name: "Open Short" });
+  await expect(openShort).toBeEnabled();
+  await openShort.click();
+  const shortConfirmation = page.getByRole("dialog", {
+    name: "Confirm SHORT",
+  });
+  await shortConfirmation
+    .getByRole("button", { name: "Confirm SHORT" })
     .click();
-  const journal = page.getByRole("region", { name: "Journal workspace" });
-  await expect(journal).toBeVisible();
-  await expect(
-    journal.getByRole("table", { name: "Closed trade journal" }),
-  ).toContainText("BTC/USD LONG");
-  await expect(journal).toContainText("Entry");
-  await expect(journal).toContainText("Exit");
+  const shortPosition = page.getByRole("article", {
+    name: "SHORT position SOL/USD",
+  });
+  await expect(shortPosition).toBeVisible();
+  await shortPosition.getByRole("button", { name: "Close full" }).click();
+  await expect(shortPosition).toHaveCount(0);
 });
 
 test("keeps responsive layouts keyboard accessible", async ({ page }) => {
@@ -110,8 +142,17 @@ test("keeps responsive layouts keyboard accessible", async ({ page }) => {
   await expect(
     page.getByRole("region", { name: "Торговый терминал" }),
   ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Markets" })).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Primary navigation" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Dashboard workspace" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Trade", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Торговый терминал" }),
   ).toBeVisible();
   await expect
     .poll(() =>
