@@ -19,6 +19,14 @@
 |  13 | Сквозной Playwright-сценарий               | готов     | 2026-08-02: Playwright ×2, `pnpm check`, `pnpm build`                           | SOL select→tick→TP/SL→preview→две Long→edit→partial/full close→Short; desktop/mobile                |
 |  14 | Production hardening и финальная приёмка   | готов     | 2026-07-27: `pnpm check`, DB integration ×3, Playwright ×2, build, prod headers | Rate limits, concurrent serialization, stale/reconnect, responsive/keyboard, clean-deploy docs      |
 
+## Последняя production-проверка
+
+- 2026-08-02: добавлена идемпотентная миграция полного Pyth market universe
+  (BTC/ETH/SOL/XRP), а источник цены позиции отображается по активному
+  server-only market-data mode, а не по устаревшему полю инструмента.
+- Проверено: `CI=true pnpm check` (78 тестов пройдено, 4 пропущено) и
+  `CI=true pnpm build`.
+
 ## Правило обновления
 
 В начале разрешённого этапа его состояние меняется на **в работе**. После реализации и успешных подходящих тестов — на **готов** с указанием проверки. При объективной внешней блокировке — на **заблокирован** с конкретной причиной. За один запуск изменяется и выполняется не более одного этапа; следующий этап автоматически не начинается.

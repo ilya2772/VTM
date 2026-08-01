@@ -1205,7 +1205,10 @@ export function IntegratedTerminal() {
                         <div>
                           <dt>Source</dt>
                           <dd>
-                            {instrument.source} ·{" "}
+                            {state.marketDataMode === "PYTH"
+                              ? "Pyth"
+                              : "Server feed"}{" "}
+                            ·{" "}
                             {liveMarkAvailable ? "server tick" : "unavailable"}
                           </dd>
                         </div>
