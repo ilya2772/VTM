@@ -1321,6 +1321,174 @@ a:focus-visible,
   color: var(--f-muted);
   text-align: center;
 }
+.portfolio-layout {
+  display: grid;
+  gap: 30px;
+}
+.portfolio-summary {
+  position: relative;
+  min-height: 176px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px;
+  border: 1px solid #63328a;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #321247 0%, #23102f 62%, #1a0d25 100%);
+  box-shadow: inset 0 1px #ffffff0d;
+}
+.portfolio-summary::after {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 32%;
+  background: repeating-linear-gradient(
+    42deg,
+    transparent 0 18px,
+    #d99cff0a 18px 20px
+  );
+  content: "";
+}
+.portfolio-summary > div,
+.portfolio-emblem {
+  position: relative;
+  z-index: 1;
+}
+.portfolio-summary > div {
+  display: grid;
+  gap: 5px;
+}
+.portfolio-summary > div > span {
+  color: #c8a8dc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.portfolio-summary strong {
+  font-size: clamp(28px, 3vw, 40px);
+  letter-spacing: -0.03em;
+}
+.portfolio-summary p {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.portfolio-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: #c6b4d0;
+}
+.portfolio-meta b {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #7623a5;
+  color: #e5b8ff;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.portfolio-emblem {
+  display: grid;
+  width: 70px;
+  height: 70px;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #9e31e1, #5c1685);
+  color: white;
+  box-shadow: 0 12px 32px #10001c80;
+  font-size: 30px;
+  font-weight: 900;
+}
+.portfolio-activity {
+  display: grid;
+  gap: 14px;
+}
+.portfolio-tabs {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+}
+.portfolio-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #7f7a87;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.portfolio-tabs button[aria-selected="true"] {
+  border-color: #a94ee2;
+  color: white;
+}
+.portfolio-tabs button span {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #24202a;
+  color: #aaa3b1;
+  font-size: 9px;
+}
+.portfolio-content {
+  min-height: 245px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--f-line);
+  border-radius: 14px;
+  background: #121116;
+}
+.portfolio-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.6fr) minmax(500px, 2fr);
+  align-items: center;
+  gap: 20px;
+  padding: 15px;
+  border: 1px solid var(--f-line);
+  border-radius: 8px;
+  background: var(--f-panel-2);
+}
+.portfolio-row > span {
+  display: grid;
+  gap: 4px;
+}
+.portfolio-row small,
+.portfolio-row dt {
+  color: var(--f-muted);
+}
+.portfolio-row dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.portfolio-row dl div {
+  display: grid;
+  gap: 4px;
+}
+.portfolio-row dd {
+  margin: 0;
+  font-weight: 700;
+}
+.portfolio-empty {
+  min-height: 215px;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  color: var(--f-muted);
+  text-align: center;
+}
+.portfolio-empty strong {
+  color: var(--f-text);
+  font-size: clamp(18px, 2vw, 25px);
+}
 .settings-panel {
   max-width: 560px;
   display: grid;
@@ -2380,6 +2548,27 @@ a:focus-visible,
   .product-workspace-head {
     align-items: start;
     flex-direction: column;
+  }
+  .portfolio-layout {
+    gap: 20px;
+  }
+  .portfolio-summary {
+    min-height: 150px;
+    padding: 20px;
+  }
+  .portfolio-emblem {
+    width: 54px;
+    height: 54px;
+    font-size: 24px;
+  }
+  .portfolio-content {
+    padding: 9px;
+  }
+  .portfolio-row {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-row dl {
+    grid-template-columns: 1fr 1fr;
   }
   .challenge-filters {
     align-items: stretch;

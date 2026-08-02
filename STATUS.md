@@ -19,9 +19,16 @@
 |  13 | Сквозной Playwright-сценарий                     | готов     | 2026-08-02: Playwright ×2, `pnpm check`, `pnpm build`                           | SOL select→tick→TP/SL→preview→две Long→edit→partial/full close→Short; desktop/mobile                |
 |  14 | Production hardening и финальная приёмка         | готов     | 2026-07-27: `pnpm check`, DB integration ×3, Playwright ×2, build, prod headers | Rate limits, concurrent serialization, stale/reconnect, responsive/keyboard, clean-deploy docs      |
 |  15 | Asset selector, Risk Score, Challenges и Profile | готов     | 2026-08-02: основной gate + Playwright layout regression ×2                     | Динамический risk/AI Coach, checkout, challenge switch; chart overflow исправлен                    |
+|  16 | Portfolio и сводная торговая активность          | готов     | 2026-08-02: `pnpm check/build`, browser 1440×900 и 390×844                      | Навигация Portfolio; equity/доходность и серверные Positions, Orders, History                       |
 
 ## Последняя production-проверка
 
+- 2026-08-02: добавлен раздел Portfolio в основную навигацию. Экран показывает
+  серверные equity и доходность, статус демо-challenge, а также переключаемые
+  Positions, Orders и History с честными empty states. Проверено `pnpm check`
+  (91 тест пройден, 4 пропущено), production build и browser на 1440×900 и
+  390×844. Внешний TradingView embed по-прежнему может записывать собственную
+  ошибку в консоль; новый экран Portfolio её не вызывает.
 - 2026-08-02: быстрый выбор размера позиции заменён доступной с клавиатуры
   компактной шкалой 0/25/50/75/100%, размер теперь рассчитывается от доступной маржи
   (`equity − used margin`), а отрицательный прогресс Profit Target отображается

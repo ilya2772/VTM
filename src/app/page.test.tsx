@@ -473,6 +473,44 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the server-backed portfolio with positions, orders and history", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/trading/orders/preview")
+          return new Response(JSON.stringify(orderPreview), { status: 200 });
+        return new Response(JSON.stringify(managedTerminalState), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
+
+    expect(
+      screen.getByRole("region", { name: "Portfolio workspace" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Portfolio value" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Demo portfolio")).toBeInTheDocument();
+    expect(screen.getByText("Unrealized PnL")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Orders/ }));
+    const portfolioPanel = screen.getByRole("tabpanel");
+    expect(within(portfolioPanel).getByText("Quantity")).toBeInTheDocument();
+    expect(within(portfolioPanel).getByText("$65,000.00")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
+    expect(
+      within(portfolioPanel).getByText("Realized PnL"),
+    ).toBeInTheDocument();
+    expect(within(portfolioPanel).getByText("Open")).toBeInTheDocument();
+  });
+
   it("shows a stale feed explicitly and blocks new orders", async () => {
     class StaleEventSource extends MockEventSource {
       override addEventListener(type: string, listener: EventListener) {
