@@ -18,6 +18,20 @@ test("completes the deterministic simulated trading journey", async ({
   await page.getByRole("button", { name: "Открыть терминал" }).click();
   await expect(page.getByText("AXIOM", { exact: true })).toBeVisible();
 
+  const sizeSlider = page.getByRole("slider", {
+    name: "Position size percentage",
+  });
+  await page.getByRole("button", { name: "Set position size to 25%" }).click();
+  await expect(page.getByRole("textbox", { name: "Order size" })).toHaveValue(
+    "12500.00",
+  );
+  await sizeSlider.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(sizeSlider).toHaveValue("26");
+  await expect(page.getByRole("textbox", { name: "Order size" })).toHaveValue(
+    "13000.00",
+  );
+
   const solana = page.getByRole("button", {
     name: /^SOLUSD Solana \/ US Dollar/,
   });

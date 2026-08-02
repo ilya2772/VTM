@@ -282,6 +282,61 @@ describe("HomePage", () => {
     expect(screen.getByText("Server outcome")).toBeInTheDocument();
   });
 
+  it("sizes orders from available margin and shows negative challenge progress", async () => {
+    const stateWithLoss = {
+      ...terminalState,
+      account: {
+        ...terminalState.account,
+        balance: "49500",
+        equity: "48000",
+        unrealizedPnl: "-1500",
+      },
+      positions: [
+        {
+          id: "position-margin",
+          instrumentId: "btc",
+          symbol: "BTC/USD",
+          side: "LONG",
+          quantity: "0.1",
+          entryPrice: "50000",
+          markPrice: "48000",
+          markAvailable: true,
+          leverage: "5",
+          liquidationPrice: "40000",
+          stopLoss: null,
+          takeProfit: null,
+          unrealizedPnl: "-200",
+        },
+      ],
+    } as const;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/trading/orders/preview")
+          return new Response(JSON.stringify(orderPreview), { status: 200 });
+        return new Response(JSON.stringify(stateWithLoss), { status: 200 });
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    expect(screen.getByText("$47,000.00")).toBeInTheDocument();
+    expect(screen.getByText("-40.00%")).toHaveClass("red");
+    expect(
+      screen.queryByRole("button", { name: "Set position size to 10%" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Set position size to 25%" }),
+    );
+    expect(screen.getByLabelText("Order size")).toHaveValue("11750.00");
+
+    fireEvent.change(screen.getByLabelText("Position size percentage"), {
+      target: { value: "50" },
+    });
+    expect(screen.getByLabelText("Order size")).toHaveValue("23500.00");
+  });
+
   it("shows live position metrics and manages SL/TP plus partial close", async () => {
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

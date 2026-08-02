@@ -23,6 +23,7 @@ import {
 import type { OrderPreview, StreamTick, TerminalState } from "./types";
 
 const timeframes = chartResolutions;
+const sizePercentMarks = [0, 25, 50, 75, 100] as const;
 type OrderKind = "MARKET" | "LIMIT" | "STOP_LIMIT";
 type Side = "LONG" | "SHORT";
 type Activity = "POSITIONS" | "ORDERS" | "HISTORY" | "RISK";
@@ -507,8 +508,9 @@ export function IntegratedTerminal() {
         .div(100)
     : new Decimal(0);
   const progress = targetMoney.gt(0)
-    ? Decimal.min(Decimal.max(profit, 0).div(targetMoney).mul(100), 100)
+    ? Decimal.min(profit.div(targetMoney).mul(100), 100)
     : new Decimal(0);
+  const progressFill = Decimal.max(progress, 0);
   const canTrade =
     state.account.status === "ACTIVE" &&
     state.challenge?.status === "ACTIVE" &&
@@ -533,6 +535,10 @@ export function IntegratedTerminal() {
       ),
     new Decimal(0),
   );
+  const availableMargin = Decimal.max(
+    new Decimal(state.account.equity).minus(usedMargin),
+    0,
+  );
   const exposure = new Decimal(state.account.balance).gt(0)
     ? usedMargin.div(state.account.balance).mul(100)
     : new Decimal(0);
@@ -555,6 +561,12 @@ export function IntegratedTerminal() {
       : isPositiveInput(amount) && isPositiveInput(mark)
         ? new Decimal(amount).mul(mark)
         : new Decimal(0);
+  const sizePercentage = availableMargin.gt(0)
+    ? Decimal.min(
+        Decimal.max(requestedNotional.div(availableMargin).mul(100), 0),
+        100,
+      ).toNumber()
+    : 0;
   const previewRisk = previews.LONG?.risk ?? previews.SHORT?.risk;
   const riskResult =
     previewRisk ??
@@ -610,9 +622,7 @@ export function IntegratedTerminal() {
     : null;
 
   function setQuickAmount(value: number) {
-    const usdSize = new Decimal(currentState.account.balance)
-      .mul(value)
-      .div(100);
+    const usdSize = availableMargin.mul(value).div(100);
     if (sizeUnit === "ASSET" && !new Decimal(mark).gt(0)) {
       setMessage("Asset sizing requires a current server price.");
       return;
@@ -895,15 +905,19 @@ export function IntegratedTerminal() {
             <p className="fusion-target">
               Profit Target
               <br />
-              <strong>{money(profit.toString(), true)}</strong> /{" "}
-              {money(targetMoney.toString())}
+              <strong className={profit.gte(0) ? "green" : "red"}>
+                {money(profit.toString(), true)}
+              </strong>{" "}
+              / {money(targetMoney.toString())}
             </p>
             <div className="fusion-bar">
-              <span style={{ width: `${progress.toFixed(2)}%` }} />
+              <span style={{ width: `${progressFill.toFixed(2)}%` }} />
             </div>
             <div className="fusion-bar-row">
               <span>Progress</span>
-              <strong>{progress.toFixed(2)}%</strong>
+              <strong className={progress.gte(0) ? undefined : "red"}>
+                {progress.toFixed(2)}%
+              </strong>
             </div>
           </section>
           <section>
@@ -1097,12 +1111,41 @@ export function IntegratedTerminal() {
                 />
               </label>
             </div>
-            <div className="fusion-percent-row" aria-label="Quick size">
-              {[10, 25, 50, 75, 100].map((value) => (
-                <button key={value} onClick={() => setQuickAmount(value)}>
-                  {value}%
-                </button>
-              ))}
+            <div className="fusion-size-control">
+              <div className="fusion-size-summary">
+                <span>Available margin</span>
+                <strong>{money(availableMargin.toString())}</strong>
+              </div>
+              <input
+                aria-label="Position size percentage"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={sizePercentage}
+                onChange={(event) =>
+                  setQuickAmount(Number(event.currentTarget.value))
+                }
+                style={{
+                  background: `linear-gradient(to right, var(--f-orange) 0%, var(--f-orange) ${sizePercentage}%, #343a43 ${sizePercentage}%, #343a43 100%)`,
+                }}
+              />
+              <div className="fusion-size-marks" aria-label="Quick size">
+                {sizePercentMarks.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={
+                      Math.round(sizePercentage) === value ? "active" : ""
+                    }
+                    style={{ left: `${value}%` }}
+                    onClick={() => setQuickAmount(value)}
+                    aria-label={`Set position size to ${value}%`}
+                  >
+                    {value}%
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="fusion-order-grid">
               <article className="fusion-order-card long">
