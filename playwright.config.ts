@@ -22,7 +22,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev --port 3107",
+    command: "node_modules/.bin/next dev --port 3107",
     url: "http://localhost:3107",
     reuseExistingServer: false,
     env: {

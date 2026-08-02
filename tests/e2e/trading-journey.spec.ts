@@ -56,6 +56,31 @@ test("completes the deterministic simulated trading journey", async ({
     .click();
   await expect(positions).toHaveCount(2);
 
+  const desktopLayout = await page
+    .locator(".fusion-app")
+    .evaluate((element) => {
+      const shell = element.getBoundingClientRect();
+      const chart = document
+        .querySelector(".fusion-chart-zone")
+        ?.getBoundingClientRect();
+      const orderDesk = document
+        .querySelector(".fusion-order-desk")
+        ?.getBoundingClientRect();
+      return {
+        shellHeight: shell.height,
+        viewportHeight: window.innerHeight,
+        chartBottom: chart?.bottom ?? Number.POSITIVE_INFINITY,
+        orderDeskTop: orderDesk?.top ?? Number.POSITIVE_INFINITY,
+      };
+    });
+  expect(desktopLayout.shellHeight).toBeLessThanOrEqual(
+    desktopLayout.viewportHeight,
+  );
+  expect(desktopLayout.chartBottom).toBeLessThanOrEqual(
+    desktopLayout.viewportHeight,
+  );
+  expect(desktopLayout.orderDeskTop).toBeLessThan(desktopLayout.viewportHeight);
+
   const position = positions.first();
   await expect(position).toBeVisible();
   const livePnl = position

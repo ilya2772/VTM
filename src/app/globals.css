@@ -1029,6 +1029,210 @@ a:focus-visible,
   border-color: var(--f-purple);
   color: white;
 }
+.asset-selector {
+  position: relative;
+  z-index: 40;
+}
+.asset-selector > .fusion-pair {
+  height: 34px;
+  color: var(--f-text);
+  cursor: pointer;
+}
+.asset-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(470px, 90vw);
+  padding: 10px;
+  border: 1px solid #384454;
+  border-radius: 7px;
+  background: #0b1119;
+  box-shadow: 0 18px 55px #000a;
+}
+.asset-popover > input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--f-line);
+  border-radius: 5px;
+  background: var(--f-panel-3);
+  color: var(--f-text);
+}
+.asset-filters {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.asset-filters button,
+.asset-star {
+  padding: 6px 8px;
+  border: 1px solid var(--f-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--f-muted);
+  cursor: pointer;
+}
+.asset-filters button.active {
+  border-color: var(--f-purple);
+  color: white;
+}
+.asset-popover [role="option"] {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  border-radius: 5px;
+}
+.asset-popover [role="option"].active,
+.asset-popover [role="option"]:hover {
+  background: #151d28;
+}
+.asset-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--f-text);
+  text-align: left;
+  cursor: pointer;
+}
+.asset-choice > span:first-child {
+  display: grid;
+}
+.asset-choice small,
+.asset-state {
+  color: var(--f-muted);
+}
+.asset-star[aria-pressed="true"] {
+  color: #f6c95c;
+}
+.fusion-risk-factors,
+.fusion-coach-list {
+  display: grid;
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--f-muted);
+  font-size: 8px;
+}
+.fusion-coach-list {
+  font-size: 9px;
+}
+.fusion-coach-list .warning strong {
+  color: #f6c95c;
+}
+.fusion-coach-list .critical strong {
+  color: var(--f-red);
+}
+.fusion-coach-list .info strong {
+  color: #65aaf6;
+}
+.challenge-filters {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--f-line);
+  border-radius: 7px;
+  background: var(--f-panel-2);
+}
+.challenge-filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--f-muted);
+}
+.challenge-filters select,
+.challenge-detail button,
+.challenge-grid button,
+.profile-summary button,
+.product-empty button {
+  padding: 8px 10px;
+  border: 1px solid var(--f-line);
+  border-radius: 5px;
+  background: var(--f-panel-3);
+  color: var(--f-text);
+  cursor: pointer;
+}
+.challenge-filters > span {
+  margin-left: auto;
+  color: #d99cff;
+}
+.challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 10px;
+}
+.challenge-grid > article,
+.challenge-detail,
+.profile-summary {
+  padding: 18px;
+  border: 1px solid var(--f-line);
+  border-radius: 7px;
+  background: var(--f-panel-2);
+}
+.challenge-grid h2,
+.challenge-detail h2,
+.profile-layout h2,
+.profile-summary h2 {
+  margin: 8px 0;
+}
+.challenge-grid > article > span,
+.challenge-grid dt,
+.challenge-detail dt,
+.profile-summary p {
+  color: var(--f-muted);
+}
+.challenge-grid > article > b {
+  display: block;
+  margin: 8px 0;
+  color: #d99cff;
+  font-size: 22px;
+}
+.challenge-grid dl,
+.challenge-detail dl {
+  display: grid;
+  gap: 5px;
+  margin: 14px 0;
+}
+.challenge-grid dl div,
+.challenge-detail dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+.challenge-grid > article > div {
+  display: flex;
+  gap: 7px;
+}
+.challenge-grid > article > div button:last-child,
+.challenge-detail > button:last-child {
+  border-color: var(--f-purple);
+  background: #35134c;
+}
+.profile-layout {
+  display: grid;
+  gap: 18px;
+}
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.profile-summary > span {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: #242d3b;
+}
+.profile-summary button {
+  margin-left: auto;
+}
 .product-workspace {
   grid-column: 1 / -1;
   min-width: 0;
@@ -1280,14 +1484,14 @@ a:focus-visible,
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(520px, 1fr) auto;
+  grid-template-rows: minmax(360px, 1fr) auto;
 }
 .fusion-chart-zone {
   position: relative;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(520px, 1fr);
+  grid-template-rows: minmax(360px, 1fr);
 }
 .fusion-chart-head {
   min-width: 0;
@@ -1335,11 +1539,16 @@ a:focus-visible,
   z-index: 8;
   top: 8px;
   right: 10px;
-  padding: 7px 9px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 11px;
   border: 1px solid #344050;
   border-radius: 4px;
   background: #080d13e8;
   color: #dce4ed;
+  line-height: 1;
 }
 .tv-frame {
   position: relative;
@@ -1998,6 +2207,28 @@ a:focus-visible,
 .form-message.error {
   color: #ff6b74;
 }
+@media (min-width: 901px) {
+  .fusion-app {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .fusion-terminal,
+  .fusion-workspace,
+  .fusion-chart-zone,
+  .tv-frame {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .fusion-rightbar {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .fusion-activity {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
 @media (max-width: 1250px) {
   .fusion-terminal {
     grid-template-columns: 170px minmax(480px, 1fr) 250px;
@@ -2050,6 +2281,9 @@ a:focus-visible,
   .fusion-order-grid {
     grid-template-columns: minmax(190px, 1fr) 130px minmax(190px, 1fr);
   }
+  .challenge-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
 }
 @media (max-width: 640px) {
   .fusion-app {
@@ -2096,6 +2330,23 @@ a:focus-visible,
   .product-workspace-head {
     align-items: start;
     flex-direction: column;
+  }
+  .challenge-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .challenge-filters > span {
+    margin-left: 0;
+  }
+  .challenge-grid {
+    grid-template-columns: 1fr;
+  }
+  .profile-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .profile-summary button {
+    margin-left: 0;
   }
   .fusion-footer span:nth-child(2) {
     display: none;

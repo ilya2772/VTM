@@ -14,9 +14,19 @@ enum AccountStatus {
 }
 
 enum ChallengeStatus {
+  PENDING_PAYMENT
+  READY
   ACTIVE
   PASSED
   FAILED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
 }
 
 enum MarketDataSource {
@@ -73,17 +83,20 @@ enum ViolationType {
 }
 
 model User {
-  id           String           @id @default(cuid())
-  email        String           @unique
-  displayName  String
-  passwordHash String?
-  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
-  accounts     TradingAccount[]
-  sessions     Session[]
-  watchlists   Watchlist[]
-  chartLayouts ChartLayout[]
-  auditLogs    AuditLog[]
+  id              String           @id @default(cuid())
+  email           String           @unique
+  displayName     String
+  passwordHash    String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  accounts        TradingAccount[]
+  sessions        Session[]
+  watchlists      Watchlist[]
+  chartLayouts    ChartLayout[]
+  auditLogs       AuditLog[]
+  activeAccountId String?          @unique
+  activeAccount   TradingAccount?  @relation("ActiveAccount", fields: [activeAccountId], references: [id], onDelete: SetNull)
+  payments        Payment[]
 }
 
 model Session {
@@ -121,26 +134,79 @@ model TradingAccount {
   dailyRiskSnapshots DailyRiskSnapshot[]
   violations         Violation[]
   auditLogs          AuditLog[]
+  activeForUsers     User[]              @relation("ActiveAccount")
 
   @@index([userId, status])
 }
 
 model Challenge {
-  id                  String          @id @default(cuid())
+  id                  String            @id @default(cuid())
   accountId           String
-  status              ChallengeStatus @default(ACTIVE)
-  startedAt           DateTime        @default(now()) @db.Timestamptz(3)
-  completedAt         DateTime?       @db.Timestamptz(3)
-  peakEquity          Decimal         @db.Decimal(30, 12)
-  dailyStartingEquity Decimal         @db.Decimal(30, 12)
-  tradingDays         Int             @default(0)
-  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
-  account             TradingAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  status              ChallengeStatus   @default(ACTIVE)
+  startedAt           DateTime          @default(now()) @db.Timestamptz(3)
+  completedAt         DateTime?         @db.Timestamptz(3)
+  peakEquity          Decimal           @db.Decimal(30, 12)
+  dailyStartingEquity Decimal           @db.Decimal(30, 12)
+  tradingDays         Int               @default(0)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  account             TradingAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
   rules               ChallengeRules?
   violations          Violation[]
+  productId           String?
+  purchasedAt         DateTime?         @db.Timestamptz(3)
+  expiresAt           DateTime?         @db.Timestamptz(3)
+  product             ChallengeProduct? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  payment             Payment?
 
   @@index([accountId, status])
+  @@index([productId, status])
+}
+
+model ChallengeProduct {
+  id                  String      @id @default(cuid())
+  slug                String      @unique @db.VarChar(96)
+  name                String      @db.VarChar(128)
+  description         String
+  accountSize         Decimal     @db.Decimal(30, 12)
+  price               Decimal     @db.Decimal(30, 12)
+  currency            String      @default("USD") @db.VarChar(3)
+  profitTargetPct     Decimal     @db.Decimal(12, 8)
+  maxDailyLossPct     Decimal     @db.Decimal(12, 8)
+  maxOverallLossPct   Decimal     @db.Decimal(12, 8)
+  minTradingDays      Int
+  maxLeverage         Decimal     @db.Decimal(12, 4)
+  maxPositionNotional Decimal     @db.Decimal(30, 12)
+  stages              Int
+  isActive            Boolean     @default(true)
+  createdAt           DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @db.Timestamptz(3)
+  challenges          Challenge[]
+  payments            Payment[]
+
+  @@index([isActive, accountSize, price, stages])
+}
+
+model Payment {
+  id                String           @id @default(cuid())
+  userId            String
+  productId         String
+  challengeId       String?          @unique
+  provider          String           @db.VarChar(32)
+  providerSessionId String           @unique @db.VarChar(255)
+  providerPaymentId String?          @unique @db.VarChar(255)
+  status            PaymentStatus    @default(PENDING)
+  amount            Decimal          @db.Decimal(30, 12)
+  currency          String           @db.VarChar(3)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+  paidAt            DateTime?        @db.Timestamptz(3)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product           ChallengeProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  challenge         Challenge?       @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }
 
 model ChallengeRules {

@@ -6,6 +6,7 @@ import {
   calculateNotional,
   calculatePnl,
   closePosition,
+  Decimal,
   simulateExecutionPrice,
 } from "@/server/execution";
 import { assertExecutableTick, type MarketTick } from "@/server/market-data";
@@ -17,6 +18,7 @@ import {
   type OrderPreviewInput,
 } from "@/server/trading/preview";
 import { validateProtectiveTargets } from "@/server/trading/targets";
+import { calculateRiskScore } from "@/shared/risk-score";
 
 export interface PlaceOrderCommand {
   userId: string;
@@ -60,6 +62,89 @@ export interface UpdatePositionTargetsCommand {
 
 const STALE_AFTER_MS = 5_000;
 
+function scoreOrderRisk(
+  account: {
+    balance: { toString(): string };
+    initialBalance: { toString(): string };
+    positions: {
+      instrumentId: string;
+      quantity: { toString(): string };
+      markPrice: { toString(): string };
+      leverage: { toString(): string };
+    }[];
+  },
+  challenge: {
+    dailyStartingEquity: { toString(): string };
+    rules: {
+      maxLeverage: { toString(): string };
+      maxDailyLossPct: { toString(): string };
+      maxOverallLossPct: { toString(): string };
+    } | null;
+    violations: { message: string }[];
+  },
+  instrumentId: string,
+  leverage: string,
+  stopLoss: string | undefined,
+  preview: { notional: string; potentialLoss: string | null },
+) {
+  if (!challenge.rules)
+    throw new ApiError(
+      403,
+      "RISK_RULES_MISSING",
+      "Challenge risk rules are unavailable.",
+    );
+  const balance = new Decimal(account.balance.toString());
+  const totalExposure = account.positions.reduce(
+    (sum, position) =>
+      sum.plus(
+        new Decimal(position.quantity.toString()).mul(
+          position.markPrice.toString(),
+        ),
+      ),
+    new Decimal(preview.notional),
+  );
+  const selectedExposure = account.positions
+    .filter((position) => position.instrumentId === instrumentId)
+    .reduce(
+      (sum, position) =>
+        sum.plus(
+          new Decimal(position.quantity.toString()).mul(
+            position.markPrice.toString(),
+          ),
+        ),
+      new Decimal(preview.notional),
+    );
+  const equity = balance;
+  const dailyStart = new Decimal(challenge.dailyStartingEquity.toString());
+  const initial = new Decimal(account.initialBalance.toString());
+  return calculateRiskScore({
+    balance: balance.toString(),
+    equity: equity.toString(),
+    totalExposure: totalExposure.toString(),
+    selectedAssetExposure: selectedExposure.toString(),
+    leverage,
+    maxLeverage: challenge.rules.maxLeverage.toString(),
+    orderNotional: preview.notional,
+    potentialLoss: preview.potentialLoss,
+    hasStopLoss: Boolean(stopLoss),
+    dailyDrawdownPct: dailyStart.gt(0)
+      ? Decimal.max(dailyStart.minus(equity), 0)
+          .div(dailyStart)
+          .mul(100)
+          .toString()
+      : "0",
+    maxDailyDrawdownPct: challenge.rules.maxDailyLossPct.toString(),
+    overallDrawdownPct: initial.gt(0)
+      ? Decimal.max(initial.minus(equity), 0).div(initial).mul(100).toString()
+      : "0",
+    maxOverallDrawdownPct: challenge.rules.maxOverallLossPct.toString(),
+    correlatedPositions: account.positions.filter(
+      (position) => position.instrumentId === instrumentId,
+    ).length,
+    blockingViolations: challenge.violations.map((item) => item.message),
+  });
+}
+
 function asText(value: { toString(): string }): string {
   return value.toString();
 }
@@ -102,7 +187,7 @@ async function persistRisk(
   const date = tradingDateAt(now, challenge.rules.timezone);
   const previousDaily = account.dailyRiskSnapshots[0];
   const evaluation = evaluateChallenge({
-    status: challenge.status,
+    status: "ACTIVE",
     completedAt: challenge.completedAt,
     now,
     balance: account.balance.toString(),
@@ -219,6 +304,7 @@ export async function previewOrder(
         },
         take: 1,
       },
+      positions: { where: { status: "OPEN" } },
     },
   });
   if (!account || account.status !== "ACTIVE")
@@ -235,7 +321,7 @@ export async function previewOrder(
   });
   if (!instrument || instrument.symbol !== tick.symbol)
     throw new ApiError(400, "INSTRUMENT_INVALID", "Instrument is unavailable.");
-  return calculateOrderPreview(
+  const preview = calculateOrderPreview(
     command,
     tick,
     {
@@ -245,6 +331,15 @@ export async function previewOrder(
     },
     now,
   );
+  const risk = scoreOrderRisk(
+    account,
+    challenge,
+    command.instrumentId,
+    command.leverage,
+    command.stopLoss,
+    preview,
+  );
+  return { ...preview, risk };
 }
 
 export async function placeOrder(
@@ -275,6 +370,7 @@ export async function placeOrder(
           },
           take: 1,
         },
+        positions: { where: { status: "OPEN" } },
       },
     });
     if (!account || account.status !== "ACTIVE")
@@ -319,6 +415,20 @@ export async function placeOrder(
       },
       now,
     );
+    const risk = scoreOrderRisk(
+      account,
+      challenge,
+      command.instrumentId,
+      command.leverage,
+      command.stopLoss,
+      preview,
+    );
+    if (risk.blocked)
+      throw new ApiError(
+        422,
+        "RISK_SCORE_CRITICAL",
+        "The proposed order creates a critical risk score.",
+      );
     const quantity = preview.quantity;
     const executionPrice = preview.expectedExecutionPrice;
     const notional = preview.notional;

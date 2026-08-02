@@ -148,7 +148,7 @@ Authenticated, same-origin requests create or cancel orders through `/api/tradin
 
 The terminal UI adapts the project-root `index.html` concept into the Next.js application. Account, challenge, position, order, trade and risk panels load from the authenticated PostgreSQL-backed server state. Market, Limit and Stop Limit intents use the transactional API; the browser does not determine the authoritative execution result.
 
-The default visual chart is TradingView's official public Advanced Chart embed using TradingView's Pyth symbols (`PYTH:BTCUSD`, `PYTH:ETHUSD`, `PYTH:SOLUSD`, and `PYTH:XRPUSD`). Market selection lives only in the left Markets panel and switches the chart, server feed, order ticket, positions and orders together. Simulated execution remains independent and server-authoritative through Axiom's Pyth/demo gateway; browser chart values are never accepted for execution.
+The default visual chart is TradingView's official public Advanced Chart embed using TradingView's Pyth symbols (`PYTH:BTCUSD`, `PYTH:ETHUSD`, `PYTH:SOLUSD`, and `PYTH:XRPUSD`). The accessible top-bar selector searches tickers and names, filters market groups, persists the selected instrument, and reuses the server watchlist for favorites. Selection switches the chart, server feed, order ticket, positions, orders, Risk Score, and AI Coach together. Simulated execution remains independent and server-authoritative through Axiom's Pyth/demo gateway; browser chart values are never accepted for execution.
 
 No licensed self-hosted TradingView Advanced Charts assets are included or imitated. The custom `ChartProvider` and Lightweight Charts implementation remains available in the codebase for a direct Axiom datafeed, but it is not the default visual chart while the official TradingView embed supplies the requested tools.
 
@@ -159,6 +159,16 @@ The order ticket supports Market, Limit and Stop Limit for Long and Short, sizin
 Challenge progress, statistics, four markets, positions, pending orders, history and risk limits are presented from authenticated server state. Open-position PnL follows the selected instrument's live server tick without a page reload. Position controls update or clear protective targets and support exact partial or full market closes through server-authoritative APIs; pending Limit and Stop Limit orders can be cancelled. The risk panel shows daily and overall drawdown, remaining percentage and currency allowance, and explicit violation or trading-block explanations.
 
 Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are functional terminal workspaces rather than placeholders. Watchlist membership and the default chart layout are persisted for the authenticated user in PostgreSQL. Journal and analytics use recorded simulated trades, while the leaderboard ranks stored simulation accounts by realized return; unsupported market fields remain explicitly `N/A`.
+
+## Risk Score and AI Coach
+
+Risk Score starts at 100 and subtracts deterministic weighted penalties: total exposure 22, requested leverage 14, open/new trade risk 18, order size 10, missing Stop Loss 12, daily drawdown 10, overall drawdown 8, selected-asset concentration 4, and correlated positions 2. Each penalty is capped at its weight. Active server challenge violations force a score of zero. Scores map to low risk at 80–100, moderate at 60–79, high at 40–59, and critical below 40; proposed orders below 20 are rejected server-side. The UI recalculates immediately for form feedback, while preview and order placement independently repeat the calculation with authoritative account, position, rule, and price data. AI Coach turns the largest factors into Info, Warning, and Critical risk-management guidance and does not provide trade directions or profit promises.
+
+## Challenge store and test payments
+
+`ChallengeProduct` stores authoritative catalog pricing and rules. Checkout creates a pending `Payment` server-side from that product; browser-provided amounts are ignored. `PAYMENT_MODE=mock` provides a local test checkout that confirms through the same idempotent fulfillment service. `PAYMENT_MODE=stripe` creates Stripe Checkout Sessions with `sk_test_` credentials only. `/api/payments/webhook` verifies the raw Stripe signature before fulfillment, and a paid event atomically creates one trading account, one ready challenge, copied challenge rules, and the payment relationship. Replayed events return the existing challenge. Profile can activate only a paid Ready or already Active challenge owned by the authenticated user.
+
+Run `pnpm db:deploy` and `pnpm db:seed` after configuring `DATABASE_URL`. For Stripe test mode, set `APP_URL`, `PAYMENT_MODE=stripe`, `STRIPE_SECRET_KEY=sk_test_...`, and `STRIPE_WEBHOOK_SECRET=whsec_...`; point the Stripe test webhook at `/api/payments/webhook` and subscribe to `checkout.session.completed`.
 
 ## Secret-handling rules
 
@@ -179,14 +189,18 @@ Dashboard, Markets, Watchlist, Journal, Leaderboard, Analytics and Settings are 
 
 ## Environment variables
 
-| Name                  | Exposure             | Purpose                                          |
-| --------------------- | -------------------- | ------------------------------------------------ |
-| `DATABASE_URL`        | server-only          | PostgreSQL connection string                     |
-| `PYTH_PRO_API_KEY`    | server-only          | Pyth Pro API credential; empty in demo mode      |
-| `PYTH_CHANNEL`        | server-only          | Pyth streaming channel                           |
-| `PYTH_STALE_AFTER_MS` | server configuration | Maximum executable Pyth tick age                 |
-| `MARKET_DATA_MODE`    | server configuration | `pyth` or visibly labelled `demo` mode           |
-| `CHART_ENGINE`        | server configuration | `tradingview` or `lightweight` adapter selection |
+| Name                    | Exposure             | Purpose                                          |
+| ----------------------- | -------------------- | ------------------------------------------------ |
+| `DATABASE_URL`          | server-only          | PostgreSQL connection string                     |
+| `PYTH_PRO_API_KEY`      | server-only          | Pyth Pro API credential; empty in demo mode      |
+| `PYTH_CHANNEL`          | server-only          | Pyth streaming channel                           |
+| `PYTH_STALE_AFTER_MS`   | server configuration | Maximum executable Pyth tick age                 |
+| `MARKET_DATA_MODE`      | server configuration | `pyth` or visibly labelled `demo` mode           |
+| `CHART_ENGINE`          | server configuration | `tradingview` or `lightweight` adapter selection |
+| `APP_URL`               | server configuration | Checkout success and cancellation origin         |
+| `PAYMENT_MODE`          | server configuration | `mock` or `stripe` test checkout                 |
+| `STRIPE_SECRET_KEY`     | server-only          | Stripe `sk_test_` API key                        |
+| `STRIPE_WEBHOOK_SECRET` | server-only          | Stripe test webhook signing secret               |
 
 ## Known limitations
 

@@ -3,26 +3,31 @@
 import Decimal from "decimal.js";
 
 import type { TerminalState } from "./types";
+import { ChallengeWorkspaces } from "./challenge-workspaces";
 
 export type ProductWorkspace =
   | "Dashboard"
   | "Trade"
   | "Markets"
   | "Watchlist"
+  | "Challenges"
   | "Journal"
   | "Leaderboard"
   | "Analytics"
-  | "Settings";
+  | "Settings"
+  | "Profile";
 
 export const productWorkspaces: readonly ProductWorkspace[] = [
   "Dashboard",
   "Trade",
   "Markets",
   "Watchlist",
+  "Challenges",
   "Journal",
   "Leaderboard",
   "Analytics",
   "Settings",
+  "Profile",
 ];
 
 interface Props {
@@ -36,6 +41,8 @@ interface Props {
   onSelectInstrument(id: string): void;
   onToggleWatchlist(id: string, enabled: boolean): Promise<void>;
   onSaveLayout(theme: "dark" | "light"): Promise<void>;
+  onStateChanged(): Promise<void>;
+  onNavigate(workspace: ProductWorkspace): void;
 }
 
 const cash = (value: string, signed = false) => {
@@ -310,6 +317,14 @@ export function ProductWorkspaces(props: Props) {
               "Settings are persisted to your server-side ChartLayout."}
           </p>
         </div>
+      )}
+      {(workspace === "Challenges" || workspace === "Profile") && (
+        <ChallengeWorkspaces
+          workspace={workspace}
+          user={state.user}
+          onStateChanged={props.onStateChanged}
+          onNavigate={props.onNavigate}
+        />
       )}
     </section>
   );

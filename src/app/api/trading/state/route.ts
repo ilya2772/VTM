@@ -19,8 +19,15 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireSession(request);
     const now = new Date();
+    const owner = await prisma.user.findUniqueOrThrow({
+      where: { id: session.user.id },
+      select: { activeAccountId: true },
+    });
     const account = await prisma.tradingAccount.findFirstOrThrow({
-      where: { userId: session.user.id },
+      where: {
+        userId: session.user.id,
+        ...(owner.activeAccountId ? { id: owner.activeAccountId } : {}),
+      },
       orderBy: { createdAt: "asc" },
       include: {
         challenges: {

@@ -12,7 +12,8 @@ export interface TerminalState {
   };
   challenge: null | {
     id: string;
-    status: "ACTIVE" | "PASSED" | "FAILED";
+    status:
+      "PENDING_PAYMENT" | "READY" | "ACTIVE" | "PASSED" | "FAILED" | "EXPIRED";
     peakEquity: string;
     dailyStartingEquity: string;
     tradingDays: number;
@@ -121,4 +122,15 @@ export interface OrderPreview {
   riskReward: string | null;
   orderStatus: "FILLED" | "OPEN";
   priceSource: "DEMO" | "PYTH";
+  risk: {
+    score: number;
+    level: "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
+    blocked: boolean;
+    factors: {
+      code: string;
+      label: string;
+      penalty: string;
+      severity: "INFO" | "WARNING" | "CRITICAL";
+    }[];
+  };
 }

@@ -11,7 +11,9 @@ import {
 } from "react";
 
 import { chartResolutions } from "@/shared/chart";
+import { calculateRiskScore } from "@/shared/risk-score";
 
+import { AssetSelector } from "./components/asset-selector";
 import { TradingViewWidget } from "./components/tradingview-widget";
 import {
   ProductWorkspaces,
@@ -219,6 +221,7 @@ export function IntegratedTerminal() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const chartZone = useRef<HTMLDivElement>(null);
+  const paymentHandled = useRef(false);
 
   const loadState = useCallback(async () => {
     const response = await fetch("/api/trading/state", { cache: "no-store" });
@@ -235,15 +238,24 @@ export function IntegratedTerminal() {
     setState(next);
     setAuthRequired(false);
     setLoadError("");
-    setSelectedInstrumentId(
-      (current) =>
+    setSelectedInstrumentId((current) => {
+      let saved = "";
+      try {
+        saved =
+          window.localStorage?.getItem("axiom.selectedInstrumentId") ?? "";
+      } catch {
+        // Persisted selection is optional in restricted browser contexts.
+      }
+      return (
         current ||
+        next.instruments.find((item) => item.id === saved)?.id ||
         next.instruments.find(
           (item) => item.symbol === next.chartLayout?.symbol,
         )?.id ||
         next.instruments[0]?.id ||
-        "",
-    );
+        ""
+      );
+    });
     if (next.chartLayout) {
       if (timeframes.some((item) => item === next.chartLayout?.timeframe))
         setTimeframe(next.chartLayout.timeframe as (typeof timeframes)[number]);
@@ -256,6 +268,45 @@ export function IntegratedTerminal() {
     const timer = window.setTimeout(() => void loadState(), 0);
     return () => window.clearTimeout(timer);
   }, [loadState]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!state || paymentHandled.current) return;
+      const params = new URLSearchParams(window.location.search);
+      const payment = params.get("payment");
+      if (!payment) return;
+      paymentHandled.current = true;
+      if (payment === "cancelled") {
+        setMessage("Checkout was cancelled; no challenge was created.");
+        setWorkspace("Challenges");
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+      const sessionId = params.get("session_id");
+      const finish = async () => {
+        if (sessionId?.startsWith("mock_")) {
+          const response = await fetch("/api/payments/mock-confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          });
+          setMessage(
+            response.ok
+              ? "Test payment confirmed. Your challenge is ready."
+              : "Test payment confirmation failed.",
+          );
+        } else {
+          setMessage(
+            "Payment returned successfully. The challenge appears after Stripe webhook confirmation.",
+          );
+        }
+        await loadState();
+        setWorkspace("Profile");
+        window.history.replaceState({}, "", window.location.pathname);
+      };
+      void finish();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadState, state]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
@@ -288,6 +339,16 @@ export function IntegratedTerminal() {
       null,
     [state, selectedInstrumentId],
   );
+  const selectInstrument = useCallback((instrumentId: string) => {
+    setSelectedInstrumentId(instrumentId);
+    setTick(null);
+    setConnection("RECONNECTING");
+    try {
+      window.localStorage?.setItem("axiom.selectedInstrumentId", instrumentId);
+    } catch {
+      // Keep the selection in memory when storage is unavailable.
+    }
+  }, []);
   useEffect(() => {
     if (!instrument) return;
     let lastTickReceivedAt = 0;
@@ -478,15 +539,48 @@ export function IntegratedTerminal() {
   const riskBlocked =
     state.challenge?.violations.some((violation) => violation.blocksTrading) ??
     false;
-  const riskScore = riskBlocked
-    ? 0
-    : exposure.gte(75)
-      ? 35
-      : exposure.gte(50)
-        ? 55
-        : exposure.gte(25)
-          ? 72
-          : 92;
+  const currentNotional = positions.reduce(
+    (sum, position) =>
+      sum.plus(new Decimal(position.quantity).mul(position.markPrice)),
+    new Decimal(0),
+  );
+  const selectedNotional = selectedPositions.reduce(
+    (sum, position) =>
+      sum.plus(new Decimal(position.quantity).mul(position.markPrice)),
+    new Decimal(0),
+  );
+  const requestedNotional =
+    sizeUnit === "USD" && isPositiveInput(amount)
+      ? new Decimal(amount)
+      : isPositiveInput(amount) && isPositiveInput(mark)
+        ? new Decimal(amount).mul(mark)
+        : new Decimal(0);
+  const previewRisk = previews.LONG?.risk ?? previews.SHORT?.risk;
+  const riskResult =
+    previewRisk ??
+    calculateRiskScore({
+      balance: state.account.balance,
+      equity: state.account.equity,
+      totalExposure: currentNotional.plus(requestedNotional).toString(),
+      selectedAssetExposure: selectedNotional
+        .plus(requestedNotional)
+        .toString(),
+      leverage: isPositiveInput(leverage) ? leverage : "1",
+      maxLeverage: rules?.maxLeverage ?? "1",
+      orderNotional: requestedNotional.toString(),
+      potentialLoss: null,
+      hasStopLoss: Boolean(stopLoss),
+      dailyDrawdownPct: state.risk.dailyDrawdownPct,
+      maxDailyDrawdownPct: rules?.maxDailyLossPct ?? "0",
+      overallDrawdownPct: state.risk.overallDrawdownPct,
+      maxOverallDrawdownPct: rules?.maxOverallLossPct ?? "0",
+      correlatedPositions: selectedPositions.length,
+      blockingViolations:
+        state.challenge?.violations
+          .filter((item) => item.blocksTrading)
+          .map((item) => item.message) ?? [],
+    });
+  const riskScore = riskResult.score;
   const confirmationPreview = confirmation
     ? previews[confirmation.side]
     : undefined;
@@ -729,10 +823,13 @@ export function IntegratedTerminal() {
             <small>PROP TERMINAL</small>
           </span>
         </div>
-        <div className="fusion-pair">
-          <strong>{instrument.symbol.replace("/", "")}</strong>
-          <span>★</span>
-        </div>
+        <AssetSelector
+          instrument={instrument}
+          instruments={state.instruments}
+          favoriteIds={state.watchlistInstrumentIds}
+          onSelect={selectInstrument}
+          onToggleFavorite={toggleWatchlist}
+        />
         <strong className="fusion-live-price">
           {(activeConnection === "LIVE" || activeConnection === "DEMO") &&
           new Decimal(mark).gt(0)
@@ -847,7 +944,7 @@ export function IntegratedTerminal() {
                 <button
                   key={item.id}
                   aria-pressed={item.id === instrument.id}
-                  onClick={() => setSelectedInstrumentId(item.id)}
+                  onClick={() => selectInstrument(item.id)}
                 >
                   <span>
                     <strong>{item.symbol.replace("/", "")}</strong>
@@ -860,6 +957,7 @@ export function IntegratedTerminal() {
           <section>
             <div className="fusion-section-title">
               <h2>Risk score</h2>
+              <span>{riskResult.level}</span>
             </div>
             <p className="fusion-risk-number">
               {riskScore}
@@ -872,6 +970,11 @@ export function IntegratedTerminal() {
               <span>Exposure</span>
               <strong>{exposure.toFixed(2)}%</strong>
             </div>
+            <ul className="fusion-risk-factors">
+              {riskResult.factors.slice(0, 3).map((factor) => (
+                <li key={factor.code}>{factor.label}</li>
+              ))}
+            </ul>
           </section>
         </aside>
 
@@ -1462,17 +1565,31 @@ export function IntegratedTerminal() {
           </section>
           <section className="fusion-right-card fusion-coach">
             <div className="fusion-section-title">
-              <h2>Risk Coach</h2>
-              <span>SERVER</span>
+              <h2>AI Coach</h2>
+              <span>RULE-BASED</span>
             </div>
             <div>
-              {riskBlocked
-                ? state.challenge?.violations[0]?.message
-                : positions.length
-                  ? `Open positions: ${positions.length}. Current exposure ${exposure.toFixed(2)}%.`
-                  : "Open a virtual position and the server risk engine will evaluate the account."}
+              <ul className="fusion-coach-list">
+                {riskResult.factors.slice(0, 4).map((factor) => (
+                  <li
+                    className={factor.severity.toLowerCase()}
+                    key={factor.code}
+                  >
+                    <strong>{factor.severity}</strong> {factor.label}.
+                  </li>
+                ))}
+                {!riskResult.factors.length && (
+                  <li className="info">
+                    <strong>INFO</strong> Current parameters comply with
+                    challenge rules.
+                  </li>
+                )}
+              </ul>
             </div>
-            <small>Rules are calculated by the Axiom server.</small>
+            <small>
+              Risk-management guidance only; not financial advice. Final checks
+              run on the Axiom server.
+            </small>
           </section>
         </aside>
         {workspace !== "Trade" && (
@@ -1485,11 +1602,13 @@ export function IntegratedTerminal() {
             busy={busy}
             message={message}
             onSelectInstrument={(id) => {
-              setSelectedInstrumentId(id);
+              selectInstrument(id);
               setWorkspace("Trade");
             }}
             onToggleWatchlist={toggleWatchlist}
             onSaveLayout={saveLayout}
+            onStateChanged={loadState}
+            onNavigate={setWorkspace}
           />
         )}
       </main>

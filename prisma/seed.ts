@@ -38,10 +38,67 @@ async function main() {
       },
     });
 
+    const products = [
+      {
+        id: "challenge-product-starter-10k",
+        slug: "starter-10k",
+        name: "Starter 10K",
+        description: "A focused one-stage evaluation for disciplined traders.",
+        accountSize: "10000",
+        price: "79",
+        profitTargetPct: "8",
+        maxDailyLossPct: "5",
+        maxOverallLossPct: "10",
+        minTradingDays: 3,
+        maxLeverage: "10",
+        maxPositionNotional: "50000",
+        stages: 1,
+      },
+      {
+        id: "challenge-product-pro-50k",
+        slug: "pro-50k",
+        name: "Pro 50K",
+        description: "A two-stage challenge with balanced targets and limits.",
+        accountSize: "50000",
+        price: "249",
+        profitTargetPct: "10",
+        maxDailyLossPct: "5",
+        maxOverallLossPct: "10",
+        minTradingDays: 3,
+        maxLeverage: "10",
+        maxPositionNotional: "250000",
+        stages: 2,
+      },
+      {
+        id: "challenge-product-elite-100k",
+        slug: "elite-100k",
+        name: "Elite 100K",
+        description:
+          "A larger two-stage evaluation with the same transparent risk rules.",
+        accountSize: "100000",
+        price: "449",
+        profitTargetPct: "10",
+        maxDailyLossPct: "4",
+        maxOverallLossPct: "8",
+        minTradingDays: 5,
+        maxLeverage: "10",
+        maxPositionNotional: "500000",
+        stages: 2,
+      },
+    ] as const;
+    for (const product of products) {
+      await tx.challengeProduct.upsert({
+        where: { slug: product.slug },
+        update: { ...product, currency: "USD", isActive: true },
+        create: { ...product, currency: "USD" },
+      });
+    }
+
     const challenge = await tx.challenge.upsert({
       where: { id: "demo-challenge" },
       update: {
         accountId: account.id,
+        productId: "challenge-product-pro-50k",
         status: "ACTIVE",
         peakEquity: "50000",
         dailyStartingEquity: "50000",
@@ -50,6 +107,7 @@ async function main() {
       create: {
         id: "demo-challenge",
         accountId: account.id,
+        productId: "challenge-product-pro-50k",
         peakEquity: "50000",
         dailyStartingEquity: "50000",
       },
@@ -80,6 +138,11 @@ async function main() {
         maxLeverage: "10",
         maxPositionNotional: "250000",
       },
+    });
+
+    await tx.user.update({
+      where: { id: demoUser.id },
+      data: { activeAccountId: account.id },
     });
 
     await tx.instrument.upsert({

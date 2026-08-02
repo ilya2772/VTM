@@ -20,6 +20,7 @@ function run(command: string, args: string[], env = process.env) {
 }
 
 export default async function globalSetup() {
+  const projectDirectory = process.cwd();
   const dataDirectory = await mkdtemp(join(tmpdir(), "axiom-e2e-postgres-"));
   const postgresLog = join(dataDirectory, "postgres.log");
   let started = false;
@@ -45,8 +46,16 @@ export default async function globalSetup() {
       PGUSER: "postgres",
     };
     run("createdb", [databaseName], databaseEnvironment);
-    run("pnpm", ["exec", "prisma", "migrate", "deploy"], databaseEnvironment);
-    run("pnpm", ["exec", "prisma", "db", "seed"], databaseEnvironment);
+    run(
+      join(projectDirectory, "node_modules/.bin/prisma"),
+      ["migrate", "deploy"],
+      databaseEnvironment,
+    );
+    run(
+      join(projectDirectory, "node_modules/.bin/tsx"),
+      ["prisma/seed.ts"],
+      databaseEnvironment,
+    );
 
     return async () => {
       run("pg_ctl", ["-D", dataDirectory, "-m", "fast", "-w", "stop"]);
