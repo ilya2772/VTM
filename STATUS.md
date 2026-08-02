@@ -22,9 +22,10 @@
 
 ## Последняя production-проверка
 
-- 2026-08-02: Fullscreen выровнен по геометрическому центру панели графика, а
-  demo-feed теперь всегда помечается `DEMO`, чтобы его цена не выглядела как
-  live Pyth. Проверено Prettier, ESLint, strict TypeScript и component tests (8).
+- 2026-08-02: Fullscreen возвращён в правую часть панели графика и оптически
+  выровнен по вертикали, а demo-feed теперь всегда помечается `DEMO`, чтобы его
+  цена не выглядела как live Pyth. Проверено Prettier, ESLint, strict TypeScript
+  и component tests (8).
 - 2026-08-02: production build теперь явно запускает `prisma generate`, чтобы
   Vercel не использовал устаревший Prisma Client из build cache. Проверено
   последовательностью Prisma generate → Next.js production build.
