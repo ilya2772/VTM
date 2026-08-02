@@ -9,7 +9,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "db:validate": "dotenv -e .env.local -- prisma validate",

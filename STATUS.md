@@ -22,6 +22,9 @@
 
 ## Последняя production-проверка
 
+- 2026-08-02: production build теперь явно запускает `prisma generate`, чтобы
+  Vercel не использовал устаревший Prisma Client из build cache. Проверено
+  последовательностью Prisma generate → Next.js production build.
 - 2026-08-02: desktop shell ограничен высотой viewport, прокрутка нескольких
   позиций перенесена внутрь activity panel, а текст Fullscreen выровнен по
   центру. Проверено целевыми component tests (9) и Playwright regression (2).
