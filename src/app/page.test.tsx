@@ -236,6 +236,7 @@ describe("HomePage", () => {
     expect(
       screen.getByText("TradingView tools · PYTH:BTCUSD market data"),
     ).toBeInTheDocument();
+    expect(await screen.findByText("DEMO")).toBeInTheDocument();
     expect(screen.queryByText(/SIM \$/)).not.toBeInTheDocument();
     for (const symbol of ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD"])
       expect(

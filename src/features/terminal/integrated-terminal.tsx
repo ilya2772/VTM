@@ -838,7 +838,7 @@ export function IntegratedTerminal() {
               ? "STALE"
               : "Unavailable"}
         </strong>
-        {activeConnection !== "LIVE" && activeConnection !== "DEMO" && (
+        {activeConnection !== "LIVE" && (
           <span
             className={`fusion-feed-state ${activeConnection.toLowerCase()}`}
           >
