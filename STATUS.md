@@ -19,9 +19,31 @@
 |  13 | Сквозной Playwright-сценарий                     | готов     | 2026-08-02: Playwright ×2, `pnpm check`, `pnpm build`                           | SOL select→tick→TP/SL→preview→две Long→edit→partial/full close→Short; desktop/mobile                |
 |  14 | Production hardening и финальная приёмка         | готов     | 2026-07-27: `pnpm check`, DB integration ×3, Playwright ×2, build, prod headers | Rate limits, concurrent serialization, stale/reconnect, responsive/keyboard, clean-deploy docs      |
 |  15 | Asset selector, Risk Score, Challenges и Profile | готов     | 2026-08-02: основной gate + Playwright layout regression ×2                     | Динамический risk/AI Coach, checkout, challenge switch; chart overflow исправлен                    |
+|  16 | Portfolio и сводная торговая активность          | готов     | 2026-08-02: `pnpm check/build`, browser 1440×900 и 390×844                      | Навигация Portfolio; equity/доходность и серверные Positions, Orders, History                       |
+|  17 | Preview SL/TP и уровни ордеров на графике        | готов     | 2026-08-03: `pnpm check/build`, Playwright ×2, browser 1280/390                 | Серверный potential P/L у полей; позиции и рабочие ордера поверх TradingView для выбранного рынка   |
 
 ## Последняя production-проверка
 
+- 2026-08-03: рядом с введёнными Stop Loss и Take Profit отображаются
+  авторитетные server-preview значения возможного убытка и потенциальной
+  прибыли с направлением Long/Short. Поверх внешнего TradingView embed добавлена
+  адаптивная панель уровней выбранного инструмента: Entry/SL/TP открытых позиций
+  и Limit/Trigger/SL/TP рабочих Limit/Stop Limit ордеров. Проверено `pnpm check`
+  (93 теста пройдено, 4 пропущено), production build, Playwright trading journey
+  (2 сценария) и browser на 1280×720 и 390×844 без горизонтального переполнения.
+  Внутренняя ошибка внешнего TradingView embed в консоли остаётся известным
+  внешним ограничением.
+- 2026-08-02: добавлен раздел Portfolio в основную навигацию. Экран показывает
+  серверные equity и доходность, статус демо-challenge, а также переключаемые
+  Positions, Orders и History с честными empty states. Проверено `pnpm check`
+  (91 тест пройден, 4 пропущено), production build и browser на 1440×900 и
+  390×844. Внешний TradingView embed по-прежнему может записывать собственную
+  ошибку в консоль; новый экран Portfolio её не вызывает.
+- 2026-08-02: быстрый выбор размера позиции заменён доступной с клавиатуры
+  компактной шкалой 0/25/50/75/100%, размер теперь рассчитывается от доступной маржи
+  (`equity − used margin`), а отрицательный прогресс Profit Target отображается
+  со знаком минус. Проверено Prettier, ESLint, strict TypeScript, Vitest (90
+  пройдено, 4 пропущено), production build и Playwright desktop/mobile (2).
 - 2026-08-02: Fullscreen возвращён в правую часть панели графика и оптически
   выровнен по вертикали, а demo-feed теперь всегда помечается `DEMO`, чтобы его
   цена не выглядела как live Pyth. Проверено Prettier, ESLint, strict TypeScript

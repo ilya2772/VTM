@@ -65,6 +65,8 @@ export interface TerminalState {
     quantity: string;
     limitPrice: string | null;
     stopPrice: string | null;
+    stopLoss: string | null;
+    takeProfit: string | null;
   }[];
   trades: {
     id: string;

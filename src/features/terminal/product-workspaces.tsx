@@ -1,6 +1,7 @@
 "use client";
 
 import Decimal from "decimal.js";
+import { useState } from "react";
 
 import type { TerminalState } from "./types";
 import { ChallengeWorkspaces } from "./challenge-workspaces";
@@ -10,6 +11,7 @@ export type ProductWorkspace =
   | "Trade"
   | "Markets"
   | "Watchlist"
+  | "Portfolio"
   | "Challenges"
   | "Journal"
   | "Leaderboard"
@@ -22,6 +24,7 @@ export const productWorkspaces: readonly ProductWorkspace[] = [
   "Trade",
   "Markets",
   "Watchlist",
+  "Portfolio",
   "Challenges",
   "Journal",
   "Leaderboard",
@@ -52,6 +55,9 @@ const cash = (value: string, signed = false) => {
 
 export function ProductWorkspaces(props: Props) {
   const { state, workspace } = props;
+  const [portfolioView, setPortfolioView] = useState<
+    "Positions" | "Orders" | "History"
+  >("Positions");
   const closed = state.trades.filter((trade) => trade.closedAt);
   const wins = closed.filter((trade) => new Decimal(trade.realizedPnl).gt(0));
   const losses = closed.filter((trade) => new Decimal(trade.realizedPnl).lt(0));
@@ -67,6 +73,12 @@ export function ProductWorkspaces(props: Props) {
     (sum, trade) => sum.plus(trade.realizedPnl),
     new Decimal(0),
   );
+  const portfolioReturn = new Decimal(state.account.equity).minus(
+    state.account.initialBalance,
+  );
+  const portfolioReturnPct = new Decimal(state.account.initialBalance).gt(0)
+    ? portfolioReturn.div(state.account.initialBalance).mul(100)
+    : new Decimal(0);
   const watched = state.instruments.filter((item) =>
     state.watchlistInstrumentIds.includes(item.id),
   );
@@ -106,6 +118,199 @@ export function ProductWorkspaces(props: Props) {
               <strong>{value}</strong>
             </article>
           ))}
+        </div>
+      )}
+
+      {workspace === "Portfolio" && (
+        <div className="portfolio-layout">
+          <section className="portfolio-summary" aria-label="Portfolio value">
+            <div>
+              <span>Portfolio value</span>
+              <strong>{cash(state.account.equity)}</strong>
+              <p className={portfolioReturn.gte(0) ? "green" : "red"}>
+                {cash(portfolioReturn.toString(), true)} (
+                {portfolioReturn.gt(0) ? "+" : ""}
+                {portfolioReturnPct.toFixed(2)}%)
+              </p>
+              <div className="portfolio-meta">
+                <b>{state.challenge?.status ?? state.account.status}</b>
+                <span>Demo portfolio</span>
+              </div>
+            </div>
+            <span className="portfolio-emblem" aria-hidden="true">
+              A
+            </span>
+          </section>
+
+          <section
+            className="portfolio-activity"
+            aria-label="Portfolio activity"
+          >
+            <div
+              className="portfolio-tabs"
+              role="tablist"
+              aria-label="Portfolio activity view"
+            >
+              {(["Positions", "Orders", "History"] as const).map((view) => (
+                <button
+                  key={view}
+                  role="tab"
+                  aria-selected={portfolioView === view}
+                  onClick={() => setPortfolioView(view)}
+                >
+                  {view}
+                  <span>
+                    {view === "Positions"
+                      ? state.positions.length
+                      : view === "Orders"
+                        ? state.orders.length
+                        : state.trades.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="portfolio-content" role="tabpanel">
+              {portfolioView === "Positions" &&
+                (state.positions.length ? (
+                  state.positions.map((position) => (
+                    <article key={position.id} className="portfolio-row">
+                      <span>
+                        <strong>{position.symbol}</strong>
+                        <small className={position.side.toLowerCase()}>
+                          {position.side} · {position.leverage}×
+                        </small>
+                      </span>
+                      <dl>
+                        <div>
+                          <dt>Size</dt>
+                          <dd>{new Decimal(position.quantity).toFixed(6)}</dd>
+                        </div>
+                        <div>
+                          <dt>Entry</dt>
+                          <dd>{cash(position.entryPrice)}</dd>
+                        </div>
+                        <div>
+                          <dt>Mark</dt>
+                          <dd>
+                            {position.markAvailable
+                              ? cash(position.markPrice)
+                              : "Unavailable"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Unrealized PnL</dt>
+                          <dd
+                            className={
+                              new Decimal(position.unrealizedPnl).gte(0)
+                                ? "green"
+                                : "red"
+                            }
+                          >
+                            {cash(position.unrealizedPnl, true)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))
+                ) : (
+                  <div className="portfolio-empty">
+                    <strong>There are no open positions at the moment</strong>
+                    <span>
+                      Positions will appear here after a simulated order fills.
+                    </span>
+                  </div>
+                ))}
+
+              {portfolioView === "Orders" &&
+                (state.orders.length ? (
+                  state.orders.map((order) => (
+                    <article key={order.id} className="portfolio-row">
+                      <span>
+                        <strong>{order.symbol}</strong>
+                        <small>
+                          {order.side} · {order.type}
+                        </small>
+                      </span>
+                      <dl>
+                        <div>
+                          <dt>Status</dt>
+                          <dd>{order.status}</dd>
+                        </div>
+                        <div>
+                          <dt>Quantity</dt>
+                          <dd>{order.quantity}</dd>
+                        </div>
+                        <div>
+                          <dt>Limit</dt>
+                          <dd>
+                            {order.limitPrice ? cash(order.limitPrice) : "N/A"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Stop</dt>
+                          <dd>
+                            {order.stopPrice ? cash(order.stopPrice) : "N/A"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))
+                ) : (
+                  <div className="portfolio-empty">
+                    <strong>There are no working orders</strong>
+                    <span>Limit and Stop Limit orders will appear here.</span>
+                  </div>
+                ))}
+
+              {portfolioView === "History" &&
+                (state.trades.length ? (
+                  state.trades.map((trade) => (
+                    <article key={trade.id} className="portfolio-row">
+                      <span>
+                        <strong>{trade.symbol}</strong>
+                        <small>
+                          {trade.side} · {trade.action}
+                        </small>
+                      </span>
+                      <dl>
+                        <div>
+                          <dt>Quantity</dt>
+                          <dd>{trade.quantity}</dd>
+                        </div>
+                        <div>
+                          <dt>Entry</dt>
+                          <dd>{cash(trade.entryPrice)}</dd>
+                        </div>
+                        <div>
+                          <dt>Exit</dt>
+                          <dd>
+                            {trade.exitPrice ? cash(trade.exitPrice) : "Open"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Realized PnL</dt>
+                          <dd
+                            className={
+                              new Decimal(trade.realizedPnl).gte(0)
+                                ? "green"
+                                : "red"
+                            }
+                          >
+                            {cash(trade.realizedPnl, true)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))
+                ) : (
+                  <div className="portfolio-empty">
+                    <strong>There is no trading history yet</strong>
+                    <span>Completed simulated activity will appear here.</span>
+                  </div>
+                ))}
+            </div>
+          </section>
         </div>
       )}
 

@@ -18,6 +18,20 @@ test("completes the deterministic simulated trading journey", async ({
   await page.getByRole("button", { name: "Открыть терминал" }).click();
   await expect(page.getByText("AXIOM", { exact: true })).toBeVisible();
 
+  const sizeSlider = page.getByRole("slider", {
+    name: "Position size percentage",
+  });
+  await page.getByRole("button", { name: "Set position size to 25%" }).click();
+  await expect(page.getByRole("textbox", { name: "Order size" })).toHaveValue(
+    "12500.00",
+  );
+  await sizeSlider.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(sizeSlider).toHaveValue("26");
+  await expect(page.getByRole("textbox", { name: "Order size" })).toHaveValue(
+    "13000.00",
+  );
+
   const solana = page.getByRole("button", {
     name: /^SOLUSD Solana \/ US Dollar/,
   });
@@ -30,6 +44,8 @@ test("completes the deterministic simulated trading journey", async ({
   await page.getByRole("combobox", { name: "Leverage" }).selectOption("2");
   await page.getByRole("textbox", { name: "Stop Loss" }).fill("160");
   await page.getByRole("textbox", { name: "Take Profit" }).fill("200");
+  await expect(page.getByText(/Possible loss \(LONG\):/)).toBeVisible();
+  await expect(page.getByText(/Potential profit \(LONG\):/)).toBeVisible();
 
   const openLong = page.getByRole("button", { name: "Open Long" });
   await expect(openLong).toBeEnabled();
@@ -46,6 +62,11 @@ test("completes the deterministic simulated trading journey", async ({
     name: "LONG position SOL/USD",
   });
   await expect(positions).toHaveCount(1);
+  const chartLevels = page.getByRole("region", {
+    name: "Active trade levels for SOL/USD",
+  });
+  await expect(chartLevels).toContainText("POSITION · LONG");
+  await expect(chartLevels).toContainText("SL $160.00 · TP $200.00");
 
   await openLong.click();
   const secondConfirmation = page.getByRole("dialog", {

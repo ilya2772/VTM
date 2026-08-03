@@ -151,6 +151,8 @@ const managedTerminalState = {
       quantity: "0.01",
       limitPrice: "65000",
       stopPrice: null,
+      stopLoss: "64000",
+      takeProfit: "71000",
     },
   ],
   trades: [
@@ -280,6 +282,95 @@ describe("HomePage", () => {
     expect(screen.getByText("Asset quantity")).toBeInTheDocument();
     expect(screen.getAllByText("Fee / margin").length).toBeGreaterThan(0);
     expect(screen.getByText("Server outcome")).toBeInTheDocument();
+  });
+
+  it("shows server-previewed loss and profit next to the entered targets", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/trading/orders/preview")
+          return new Response(
+            JSON.stringify({
+              ...orderPreview,
+              potentialLoss: "-37.41",
+              potentialProfit: "66.24",
+            }),
+            { status: 200 },
+          );
+        return new Response(JSON.stringify(terminalState), { status: 200 });
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    fireEvent.change(screen.getByLabelText("Stop Loss"), {
+      target: { value: "65000" },
+    });
+    fireEvent.change(screen.getByLabelText("Take Profit"), {
+      target: { value: "72000" },
+    });
+
+    expect(
+      await screen.findByText("Possible loss (LONG): -$37.41"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Potential profit (LONG): +$66.24"),
+    ).toBeInTheDocument();
+  });
+
+  it("sizes orders from available margin and shows negative challenge progress", async () => {
+    const stateWithLoss = {
+      ...terminalState,
+      account: {
+        ...terminalState.account,
+        balance: "49500",
+        equity: "48000",
+        unrealizedPnl: "-1500",
+      },
+      positions: [
+        {
+          id: "position-margin",
+          instrumentId: "btc",
+          symbol: "BTC/USD",
+          side: "LONG",
+          quantity: "0.1",
+          entryPrice: "50000",
+          markPrice: "48000",
+          markAvailable: true,
+          leverage: "5",
+          liquidationPrice: "40000",
+          stopLoss: null,
+          takeProfit: null,
+          unrealizedPnl: "-200",
+        },
+      ],
+    } as const;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/trading/orders/preview")
+          return new Response(JSON.stringify(orderPreview), { status: 200 });
+        return new Response(JSON.stringify(stateWithLoss), { status: 200 });
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    expect(screen.getByText("$47,000.00")).toBeInTheDocument();
+    expect(screen.getByText("-40.00%")).toHaveClass("red");
+    expect(
+      screen.queryByRole("button", { name: "Set position size to 10%" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Set position size to 25%" }),
+    );
+    expect(screen.getByLabelText("Order size")).toHaveValue("11750.00");
+
+    fireEvent.change(screen.getByLabelText("Position size percentage"), {
+      target: { value: "50" },
+    });
+    expect(screen.getByLabelText("Order size")).toHaveValue("23500.00");
   });
 
   it("shows live position metrics and manages SL/TP plus partial close", async () => {
@@ -416,6 +507,44 @@ describe("HomePage", () => {
     expect(
       screen.getByRole("region", { name: "Торговый терминал" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows the server-backed portfolio with positions, orders and history", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/trading/orders/preview")
+          return new Response(JSON.stringify(orderPreview), { status: 200 });
+        return new Response(JSON.stringify(managedTerminalState), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    fireEvent.click(screen.getByRole("button", { name: "Portfolio" }));
+
+    expect(
+      screen.getByRole("region", { name: "Portfolio workspace" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Portfolio value" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Demo portfolio")).toBeInTheDocument();
+    expect(screen.getByText("Unrealized PnL")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Orders/ }));
+    const portfolioPanel = screen.getByRole("tabpanel");
+    expect(within(portfolioPanel).getByText("Quantity")).toBeInTheDocument();
+    expect(within(portfolioPanel).getByText("$65,000.00")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^History/ }));
+    expect(
+      within(portfolioPanel).getByText("Realized PnL"),
+    ).toBeInTheDocument();
+    expect(within(portfolioPanel).getByText("Open")).toBeInTheDocument();
   });
 
   it("shows a stale feed explicitly and blocks new orders", async () => {
