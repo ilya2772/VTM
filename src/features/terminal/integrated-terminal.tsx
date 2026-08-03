@@ -596,6 +596,18 @@ export function IntegratedTerminal() {
   const confirmationPreview = confirmation
     ? previews[confirmation.side]
     : undefined;
+  const potentialLossPreview = (["LONG", "SHORT"] as const)
+    .map((side) => ({ side, value: previews[side]?.potentialLoss }))
+    .find(
+      (item): item is { side: Side; value: string } =>
+        typeof item.value === "string",
+    );
+  const potentialProfitPreview = (["LONG", "SHORT"] as const)
+    .map((side) => ({ side, value: previews[side]?.potentialProfit }))
+    .find(
+      (item): item is { side: Side; value: string } =>
+        typeof item.value === "string",
+    );
   const dailyRiskRemainingPct = rules
     ? Decimal.max(
         new Decimal(rules.maxDailyLossPct).minus(state.risk.dailyDrawdownPct),
@@ -1009,6 +1021,8 @@ export function IntegratedTerminal() {
               symbol={instrument.symbol}
               timeframe={timeframe}
               theme={theme}
+              positions={selectedPositions}
+              orders={selectedOrders}
             />
           </div>
 
@@ -1099,6 +1113,18 @@ export function IntegratedTerminal() {
                   value={stopLoss}
                   onChange={(event) => setStopLoss(event.target.value)}
                 />
+                {stopLoss && (
+                  <span
+                    className="fusion-target-preview loss"
+                    aria-live="polite"
+                  >
+                    {previewStatus === "loading"
+                      ? "Calculating possible loss…"
+                      : potentialLossPreview
+                        ? `Possible loss (${potentialLossPreview.side}): ${money(potentialLossPreview.value, true)}`
+                        : "Enter a valid level for Long or Short"}
+                  </span>
+                )}
               </label>
               <label>
                 Take Profit
@@ -1109,6 +1135,18 @@ export function IntegratedTerminal() {
                   value={takeProfit}
                   onChange={(event) => setTakeProfit(event.target.value)}
                 />
+                {takeProfit && (
+                  <span
+                    className="fusion-target-preview profit"
+                    aria-live="polite"
+                  >
+                    {previewStatus === "loading"
+                      ? "Calculating potential profit…"
+                      : potentialProfitPreview
+                        ? `Potential profit (${potentialProfitPreview.side}): ${money(potentialProfitPreview.value, true)}`
+                        : "Enter a valid level for Long or Short"}
+                  </span>
+                )}
               </label>
             </div>
             <div className="fusion-size-control">

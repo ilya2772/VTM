@@ -44,6 +44,8 @@ test("completes the deterministic simulated trading journey", async ({
   await page.getByRole("combobox", { name: "Leverage" }).selectOption("2");
   await page.getByRole("textbox", { name: "Stop Loss" }).fill("160");
   await page.getByRole("textbox", { name: "Take Profit" }).fill("200");
+  await expect(page.getByText(/Possible loss \(LONG\):/)).toBeVisible();
+  await expect(page.getByText(/Potential profit \(LONG\):/)).toBeVisible();
 
   const openLong = page.getByRole("button", { name: "Open Long" });
   await expect(openLong).toBeEnabled();
@@ -60,6 +62,11 @@ test("completes the deterministic simulated trading journey", async ({
     name: "LONG position SOL/USD",
   });
   await expect(positions).toHaveCount(1);
+  const chartLevels = page.getByRole("region", {
+    name: "Active trade levels for SOL/USD",
+  });
+  await expect(chartLevels).toContainText("POSITION · LONG");
+  await expect(chartLevels).toContainText("SL $160.00 · TP $200.00");
 
   await openLong.click();
   const secondConfirmation = page.getByRole("dialog", {

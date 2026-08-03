@@ -151,6 +151,8 @@ const managedTerminalState = {
       quantity: "0.01",
       limitPrice: "65000",
       stopPrice: null,
+      stopLoss: "64000",
+      takeProfit: "71000",
     },
   ],
   trades: [
@@ -280,6 +282,40 @@ describe("HomePage", () => {
     expect(screen.getByText("Asset quantity")).toBeInTheDocument();
     expect(screen.getAllByText("Fee / margin").length).toBeGreaterThan(0);
     expect(screen.getByText("Server outcome")).toBeInTheDocument();
+  });
+
+  it("shows server-previewed loss and profit next to the entered targets", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "/api/trading/orders/preview")
+          return new Response(
+            JSON.stringify({
+              ...orderPreview,
+              potentialLoss: "-37.41",
+              potentialProfit: "66.24",
+            }),
+            { status: 200 },
+          );
+        return new Response(JSON.stringify(terminalState), { status: 200 });
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByText("AXIOM");
+    fireEvent.change(screen.getByLabelText("Stop Loss"), {
+      target: { value: "65000" },
+    });
+    fireEvent.change(screen.getByLabelText("Take Profit"), {
+      target: { value: "72000" },
+    });
+
+    expect(
+      await screen.findByText("Possible loss (LONG): -$37.41"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Potential profit (LONG): +$66.24"),
+    ).toBeInTheDocument();
   });
 
   it("sizes orders from available margin and shows negative challenge progress", async () => {

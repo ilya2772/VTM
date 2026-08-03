@@ -206,6 +206,8 @@ export async function GET(request: NextRequest) {
         quantity: order.quantity.toString(),
         limitPrice: order.limitPrice?.toString() ?? null,
         stopPrice: order.stopPrice?.toString() ?? null,
+        stopLoss: order.stopLoss?.toString() ?? null,
+        takeProfit: order.takeProfit?.toString() ?? null,
       })),
       trades: account.trades.map((trade) => ({
         id: trade.id,

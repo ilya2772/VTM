@@ -2,6 +2,25 @@
 
 import { useEffect, useRef } from "react";
 
+export interface TradingViewPositionLevel {
+  id: string;
+  side: "LONG" | "SHORT";
+  entryPrice: string;
+  stopLoss: string | null;
+  takeProfit: string | null;
+}
+
+export interface TradingViewOrderLevel {
+  id: string;
+  type: string;
+  side: string;
+  status: string;
+  limitPrice: string | null;
+  stopPrice: string | null;
+  stopLoss: string | null;
+  takeProfit: string | null;
+}
+
 const symbolMap: Record<string, string> = {
   "BTC/USD": "PYTH:BTCUSD",
   "ETH/USD": "PYTH:ETHUSD",
@@ -24,14 +43,30 @@ const intervalMap: Record<string, string> = {
   "1M": "M",
 };
 
+function displayPrice(value: string | null): string {
+  if (value === null) return "N/A";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  }).format(numeric);
+}
+
 export function TradingViewWidget({
   symbol,
   timeframe,
   theme,
+  positions = [],
+  orders = [],
 }: {
   symbol: string;
   timeframe: string;
   theme: "dark" | "light";
+  positions?: readonly TradingViewPositionLevel[];
+  orders?: readonly TradingViewOrderLevel[];
 }) {
   const host = useRef<HTMLDivElement>(null);
 
@@ -71,6 +106,8 @@ export function TradingViewWidget({
     return () => node.replaceChildren();
   }, [symbol, theme, timeframe]);
 
+  const levelCount = positions.length + orders.length;
+
   return (
     <div className="tv-frame">
       <div
@@ -78,6 +115,52 @@ export function TradingViewWidget({
         className="tradingview-widget-container"
         aria-label={`TradingView PYTH chart for ${symbol}`}
       />
+      {levelCount > 0 && (
+        <section
+          className="chart-trade-levels"
+          aria-label={`Active trade levels for ${symbol}`}
+        >
+          <header>
+            <strong>Active levels</strong>
+            <span>{levelCount}</span>
+          </header>
+          <div className="chart-trade-level-list">
+            {positions.map((position) => (
+              <article className="chart-level-card position" key={position.id}>
+                <div>
+                  <span className={position.side.toLowerCase()}>
+                    POSITION · {position.side}
+                  </span>
+                  <strong>Entry {displayPrice(position.entryPrice)}</strong>
+                </div>
+                <small>
+                  SL {displayPrice(position.stopLoss)} · TP{" "}
+                  {displayPrice(position.takeProfit)}
+                </small>
+              </article>
+            ))}
+            {orders.map((order) => (
+              <article className="chart-level-card order" key={order.id}>
+                <div>
+                  <span className={order.side.toLowerCase()}>
+                    {order.type.replace("_", " ")} · {order.side}
+                  </span>
+                  <strong>
+                    Limit {displayPrice(order.limitPrice)}
+                    {order.stopPrice
+                      ? ` · Trigger ${displayPrice(order.stopPrice)}`
+                      : ""}
+                  </strong>
+                </div>
+                <small>
+                  {order.status} · SL {displayPrice(order.stopLoss)} · TP{" "}
+                  {displayPrice(order.takeProfit)}
+                </small>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="chart-disclosure">
         TradingView tools · {symbolMap[symbol] ?? "PYTH:BTCUSD"} market data ·
         simulated execution stays server-authoritative

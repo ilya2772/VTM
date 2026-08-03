@@ -1731,6 +1731,83 @@ a:focus-visible,
   width: 100%;
   height: 100%;
 }
+.chart-trade-levels {
+  position: absolute;
+  z-index: 7;
+  top: 46px;
+  right: 10px;
+  width: min(270px, calc(100% - 20px));
+  max-height: calc(100% - 88px);
+  overflow: hidden;
+  border: 1px solid #344050;
+  border-radius: 6px;
+  background: #080d13e8;
+  box-shadow: 0 10px 30px #0008;
+  backdrop-filter: blur(7px);
+}
+.chart-trade-levels header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 9px;
+  border-bottom: 1px solid #2b3542;
+  color: #dce4ed;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.chart-trade-levels header span {
+  min-width: 18px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #6f4cff;
+  color: #fff;
+  text-align: center;
+}
+.chart-trade-level-list {
+  max-height: min(250px, calc(100vh - 250px));
+  overflow-y: auto;
+}
+.chart-level-card {
+  display: grid;
+  gap: 5px;
+  padding: 8px 9px;
+  border-bottom: 1px solid #222c38;
+}
+.chart-level-card:last-child {
+  border-bottom: 0;
+}
+.chart-level-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.chart-level-card span,
+.chart-level-card strong,
+.chart-level-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-level-card span {
+  font-size: 7px;
+  font-weight: 750;
+}
+.chart-level-card span.long {
+  color: var(--f-green);
+}
+.chart-level-card span.short {
+  color: var(--f-red);
+}
+.chart-level-card strong {
+  color: #eef3f8;
+  font-size: 8px;
+}
+.chart-level-card small {
+  color: #8c98a7;
+  font-size: 7px;
+}
 .chart-provider-frame {
   position: relative;
   min-height: 0;
@@ -1829,6 +1906,19 @@ a:focus-visible,
   background: #fffffff0;
   color: #62707e;
 }
+:root[data-theme="light"] .chart-trade-levels {
+  border-color: #c4ced7;
+  background: #fffffff0;
+  box-shadow: 0 10px 30px #42546626;
+}
+:root[data-theme="light"] .chart-trade-levels header,
+:root[data-theme="light"] .chart-level-card strong {
+  color: #101820;
+}
+:root[data-theme="light"] .chart-trade-levels header,
+:root[data-theme="light"] .chart-level-card {
+  border-color: #d9e0e6;
+}
 .fusion-order-desk {
   padding: 9px 12px 8px;
   border-top: 1px solid var(--f-line);
@@ -1868,6 +1958,17 @@ a:focus-visible,
   border-radius: 3px;
   background: #080c12;
   color: #fff;
+}
+.fusion-target-preview {
+  min-height: 10px;
+  font-size: 7px;
+  line-height: 1.25;
+}
+.fusion-target-preview.loss {
+  color: #ff8f99;
+}
+.fusion-target-preview.profit {
+  color: #62dfa8;
 }
 .fusion-size-control {
   width: 25%;
@@ -2596,6 +2697,11 @@ a:focus-visible,
   }
   .chart-disclosure {
     max-width: 92%;
+  }
+  .chart-trade-levels {
+    top: 44px;
+    right: 6px;
+    width: min(240px, calc(100% - 12px));
   }
   .chart-provider-toolbar {
     gap: 8px;
